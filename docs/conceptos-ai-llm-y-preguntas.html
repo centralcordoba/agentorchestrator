@@ -1,0 +1,1241 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conceptos de IA y LLM en el sistema multiagente</title>
+<style>
+:root{
+  --bg:#f6f8fb; --panel:#ffffff; --panel-2:#f0f4fa; --ink:#101828; --ink-2:#475467;
+  --ink-3:#667085; --line:#dfe6f0; --line-2:#eaeff6;
+  --accent:#2563eb; --accent-soft:#e8efff; --accent-ink:#1e40af;
+  --green:#0f8a5f; --green-soft:#e3f6ee;
+  --amber:#a15c00; --amber-soft:#fdf1dc;
+  --red:#b42318; --red-soft:#fdeceb;
+  --purple:#6b3fb5; --purple-soft:#f0e9fc;
+  --code-bg:#0f172a; --code-ink:#e2e8f0;
+  --radius:14px;
+  --shadow:0 1px 2px rgba(16,24,40,.05), 0 8px 24px -12px rgba(16,24,40,.18);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0b1220; --panel:#121a2b; --panel-2:#182338; --ink:#e8eefc; --ink-2:#a9b8d4;
+    --ink-3:#8496b8; --line:#25324a; --line-2:#1d2839;
+    --accent:#79a5ff; --accent-soft:#1a2947; --accent-ink:#bcd2ff;
+    --green:#5ed6a4; --green-soft:#12312a;
+    --amber:#f0b95e; --amber-soft:#3a2c12;
+    --red:#ff9d94; --red-soft:#3a1c1a;
+    --purple:#c0a6f5; --purple-soft:#2a2145;
+    --code-bg:#080d18; --code-ink:#d7e2f5;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 12px 30px -16px rgba(0,0,0,.7);
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth; scroll-padding-top:84px}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,"Helvetica Neue",Arial,sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+code,kbd,pre{font-family:"SF Mono",SFMono-Regular,ui-monospace,Menlo,Consolas,"Liberation Mono",monospace}
+code{background:var(--panel-2); color:var(--accent-ink); padding:.1em .38em; border-radius:5px; font-size:.87em; border:1px solid var(--line-2)}
+pre{background:var(--code-bg); color:var(--code-ink); padding:18px 20px; border-radius:12px; overflow-x:auto; font-size:13px; line-height:1.55; margin:0 0 18px}
+pre code{background:none; color:inherit; border:none; padding:0; font-size:inherit}
+a{color:var(--accent); text-decoration:none}
+a:hover{text-decoration:underline}
+
+/* ---------- layout ---------- */
+.wrap{max-width:1080px; margin:0 auto; padding:0 22px}
+header.top{
+  position:sticky; top:0; z-index:50; backdrop-filter:saturate(180%) blur(12px);
+  background:color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom:1px solid var(--line);
+}
+header.top .wrap{display:flex; align-items:center; gap:18px; height:60px}
+.brand{font-weight:700; letter-spacing:-.01em; white-space:nowrap}
+.brand span{color:var(--accent)}
+nav.tabs{display:flex; gap:4px; overflow-x:auto; scrollbar-width:none}
+nav.tabs::-webkit-scrollbar{display:none}
+nav.tabs a{
+  padding:6px 11px; border-radius:8px; font-size:13.5px; font-weight:500; color:var(--ink-2); white-space:nowrap;
+}
+nav.tabs a:hover{background:var(--panel-2); text-decoration:none; color:var(--ink)}
+
+.hero{padding:56px 0 40px; border-bottom:1px solid var(--line)}
+.eyebrow{
+  display:inline-block; font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase;
+  color:var(--accent); background:var(--accent-soft); padding:5px 11px; border-radius:99px; margin-bottom:18px;
+}
+h1{font-size:clamp(30px,4.6vw,44px); line-height:1.15; letter-spacing:-.025em; margin:0 0 14px; font-weight:750}
+.lede{font-size:18px; color:var(--ink-2); max-width:68ch; margin:0 0 26px}
+.chips{display:flex; flex-wrap:wrap; gap:8px}
+.chip{font-size:12.5px; font-weight:600; padding:5px 11px; border-radius:99px; background:var(--panel); border:1px solid var(--line); color:var(--ink-2)}
+
+section{padding:52px 0; border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:none}
+h2{font-size:27px; letter-spacing:-.02em; margin:0 0 6px; font-weight:700}
+h2 .num{color:var(--accent); font-variant-numeric:tabular-nums; margin-right:10px}
+.sub{color:var(--ink-2); margin:0 0 28px; max-width:72ch}
+h3{font-size:18px; margin:34px 0 12px; letter-spacing:-.01em}
+
+/* ---------- concept cards ---------- */
+.grid{display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(288px,1fr))}
+.card{
+  background:var(--panel); border:1px solid var(--line); border-radius:var(--radius);
+  padding:20px; box-shadow:var(--shadow); position:relative; overflow:hidden;
+}
+.card::before{content:""; position:absolute; inset:0 auto 0 0; width:3px; background:var(--accent); opacity:.85}
+.card.g::before{background:var(--green)} .card.a::before{background:var(--amber)}
+.card.p::before{background:var(--purple)} .card.r::before{background:var(--red)}
+.card h4{margin:0 0 4px; font-size:16px; letter-spacing:-.01em}
+.card .en{font-size:12.5px; color:var(--ink-3); font-style:italic; margin:0 0 10px}
+.card p{margin:0 0 12px; font-size:14.5px; color:var(--ink-2)}
+.where{
+  font-size:12.5px; color:var(--ink-2); border-top:1px dashed var(--line);
+  padding-top:10px; margin-top:auto;
+}
+.where b{color:var(--ink); font-weight:600}
+
+/* ---------- table ---------- */
+.tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); box-shadow:var(--shadow)}
+table{border-collapse:collapse; width:100%; font-size:14.5px; min-width:560px}
+th,td{padding:12px 15px; text-align:left; vertical-align:top; border-bottom:1px solid var(--line-2)}
+th{background:var(--panel-2); font-size:12.5px; text-transform:uppercase; letter-spacing:.06em; color:var(--ink-2); font-weight:700}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--panel-2)}
+
+/* ---------- callout ---------- */
+.note{
+  background:var(--amber-soft); border-left:4px solid var(--amber); color:var(--ink);
+  padding:14px 18px; border-radius:0 10px 10px 0; margin:22px 0; font-size:14.5px;
+}
+.note b{color:var(--amber)}
+.note.blue{background:var(--accent-soft); border-color:var(--accent)} .note.blue b{color:var(--accent-ink)}
+
+/* ---------- diagram ---------- */
+figure{margin:26px 0; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:22px; box-shadow:var(--shadow)}
+figure svg{width:100%; height:auto; display:block}
+figcaption{font-size:13px; color:var(--ink-3); margin-top:14px; text-align:center}
+
+/* ---------- Q&A ---------- */
+.filters{display:flex; flex-wrap:wrap; gap:8px; margin-bottom:20px}
+.filters button{
+  font:inherit; font-size:13px; font-weight:600; cursor:pointer; padding:7px 14px; border-radius:99px;
+  border:1px solid var(--line); background:var(--panel); color:var(--ink-2); transition:.15s;
+}
+.filters button:hover{border-color:var(--accent); color:var(--ink)}
+.filters button[aria-pressed="true"]{background:var(--accent); border-color:var(--accent); color:#fff}
+details.qa{
+  background:var(--panel); border:1px solid var(--line); border-radius:12px; margin-bottom:10px;
+  overflow:hidden; transition:.15s;
+}
+details.qa[open]{border-color:var(--accent); box-shadow:var(--shadow)}
+details.qa summary{
+  cursor:pointer; padding:15px 18px 15px 46px; font-weight:600; font-size:15.5px; position:relative; list-style:none;
+}
+details.qa summary::-webkit-details-marker{display:none}
+details.qa summary::before{
+  content:"+"; position:absolute; left:17px; top:50%; transform:translateY(-50%);
+  width:20px; height:20px; border-radius:6px; background:var(--accent-soft); color:var(--accent-ink);
+  display:grid; place-items:center; font-size:15px; font-weight:700; line-height:1;
+}
+details.qa[open] summary::before{content:"−"}
+details.qa summary:hover{background:var(--panel-2)}
+.qa .body{padding:0 18px 16px 46px; font-size:15px; color:var(--ink-2)}
+.qa .body p{margin:0 0 11px}
+.qa .body p:last-child{margin-bottom:0}
+.tag{
+  display:inline-block; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase;
+  padding:3px 8px; border-radius:6px; margin-left:8px; vertical-align:1.5px;
+  background:var(--panel-2); color:var(--ink-3); border:1px solid var(--line-2);
+}
+.hidden{display:none !important}
+
+/* ---------- improvements ---------- */
+.imp{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:22px; margin-bottom:18px}
+.imp > h4{margin:0 0 4px; font-size:17px; display:flex; align-items:center; gap:9px}
+.imp > .k{font-size:13.5px; color:var(--ink-3); margin:0 0 16px}
+.item{padding:14px 0; border-top:1px solid var(--line-2)}
+.item:first-of-type{border-top:1px solid var(--line)}
+.item h5{margin:0 0 5px; font-size:15px; font-weight:650}
+.item p{margin:0 0 8px; font-size:14.5px; color:var(--ink-2)}
+.meta{display:flex; flex-wrap:wrap; gap:6px}
+.pill{font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:99px; letter-spacing:.02em}
+.pill.hi{background:var(--red-soft); color:var(--red)}
+.pill.me{background:var(--amber-soft); color:var(--amber)}
+.pill.lo{background:var(--green-soft); color:var(--green)}
+.pill.n{background:var(--panel-2); color:var(--ink-3); border:1px solid var(--line-2)}
+.dot{width:9px; height:9px; border-radius:3px; flex:none}
+
+footer{padding:36px 0 60px; color:var(--ink-3); font-size:13.5px; text-align:center}
+@media(max-width:640px){
+  .hero{padding:38px 0 30px} section{padding:40px 0}
+  .qa .body{padding-left:18px} details.qa summary{padding-left:44px}
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="brand">Multiagente <span>· IA/LLM</span></div>
+    <nav class="tabs">
+      <a href="#conceptos">Conceptos</a>
+      <a href="#modos">Modos</a>
+      <a href="#bucle">Bucle agéntico</a>
+      <a href="#prompts">Prompts</a>
+      <a href="#anti">Anti-alucinación</a>
+      <a href="#qa">Preguntas y respuestas</a>
+      <a href="#mejoras">Oportunidades de mejora</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="hero">
+  <span class="eyebrow">Referencia técnica</span>
+  <h1>Conceptos de IA y LLM que usa la aplicación</h1>
+  <p class="lede">La app es un sistema multiagente que analiza acciones, pero su valor real es didáctico:
+  implementa —en un tamaño legible— casi todo el vocabulario moderno de ingeniería con LLMs. Esta guía nombra
+  cada concepto, dice <em>dónde vive en el código</em>, responde las preguntas que surgen al leerlo y propone
+  por dónde seguir.</p>
+  <div class="chips">
+    <span class="chip">Sistema multiagente</span>
+    <span class="chip">Tool calling</span>
+    <span class="chip">Salida estructurada</span>
+    <span class="chip">Prompting por capas</span>
+    <span class="chip">Grounding</span>
+    <span class="chip">Guardarraíles</span>
+    <span class="chip">Event sourcing</span>
+    <span class="chip">Fallback determinista</span>
+    <span class="chip">FinOps de LLM</span>
+  </div>
+</div>
+
+<!-- ================= CONCEPTOS ================= -->
+<section id="conceptos">
+  <h2><span class="num">01</span>Conceptos de IA y LLM, y dónde viven</h2>
+  <p class="sub">Cada tarjeta es un concepto que podrías encontrar en cualquier paper o entrevista, con su
+  traducción exacta a este repositorio. Si podés señalar el archivo, entendiste el concepto.</p>
+
+  <div class="grid">
+
+    <div class="card">
+      <h4>Sistema multiagente</h4>
+      <p class="en">multi-agent system</p>
+      <p>Varios agentes especializados —datos, técnico, riesgo, escéptico, decisión— resuelven en conjunto
+      una tarea que ninguno resuelve solo. La especialización reduce el contexto que cada uno necesita y hace
+      auditable el razonamiento.</p>
+      <div class="where"><b>Dónde:</b> <code>agents/*.py</code>, enum <code>AgentName</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Orquestación centralizada</h4>
+      <p class="en">orchestrator / hub-and-spoke</p>
+      <p>Un coordinador conoce el guion; los agentes no se conocen entre sí. Es lo contrario de una
+      "swarm" totalmente descentralizada: menos emergencia, mucha más previsibilidad y depuración.</p>
+      <div class="where"><b>Dónde:</b> <code>Orchestrator.analyze_symbol()</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Paso de mensajes tipado</h4>
+      <p class="en">typed message passing</p>
+      <p>Los agentes no comparten memoria: intercambian sobres inmutables (<code>AgentMessage</code>) con
+      emisor, receptor, tipo y payload. <code>in_reply_to</code> encadena petición y respuesta en hilos.</p>
+      <div class="where"><b>Dónde:</b> <code>models.py</code>, <code>MessageType</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Comunicación directa entre agentes</h4>
+      <p class="en">peer-to-peer agent messaging</p>
+      <p>El agente de riesgo le pide más histórico a market_data, y el escéptico reta al técnico, sin
+      pasar por el coordinador como decisor —pero sí por el mismo canal, así nada queda invisible.</p>
+      <div class="where"><b>Dónde:</b> <code>info_request</code>, <code>challenge</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>Tool calling</h4>
+      <p class="en">function calling</p>
+      <p>El modelo no calcula: pide que se ejecute una función Python declarada con nombre, descripción y
+      JSON Schema. Aquí algunas herramientas calculan (<code>compute_risk_metrics</code>) y otras
+      <em>envían mensajes reales a otros agentes</em> (<code>request_history</code>).</p>
+      <div class="where"><b>Dónde:</b> <code>Tool</code> = <code>ToolSpec</code> + <code>handler</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>Bucle agéntico</h4>
+      <p class="en">agent loop / ReAct</p>
+      <p>Ciclo modelo → herramienta → resultado → modelo, hasta que el modelo devuelve el JSON final. El
+      agente decide <em>qué</em> mirar y <em>cuándo</em> pedir más datos, con un tope de pasos.</p>
+      <div class="where"><b>Dónde:</b> <code>BaseAgent.run_agent_loop()</code>, <code>AGENT_MAX_STEPS</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>Salida estructurada</h4>
+      <p class="en">structured output / JSON mode</p>
+      <p>Cada agente exige un JSON conforme a un esquema (<code>RISK_SCHEMA</code>, <code>TECH_SCHEMA</code>…).
+      Sin esto, un sistema multiagente no puede encadenar salidas de forma fiable.</p>
+      <div class="where"><b>Dónde:</b> <code>complete_json()</code>, <code>schema=</code> en <code>chat()</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>Prompt de sistema y roles</h4>
+      <p class="en">system prompt · role separation</p>
+      <p>El prompt fija el papel del modelo. En modo <code>rules</code> es explícito: <em>"no cambies la
+      postura; solo explícala"</em>. Separar quién decide de quién redacta es una decisión de arquitectura,
+      no de estilo.</p>
+      <div class="where"><b>Dónde:</b> <code>SYSTEM_PROMPT</code>, <code>AGENT_SYSTEM_PROMPT</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>Prompting por capas</h4>
+      <p class="en">layered prompt composition</p>
+      <p>Ningún prompt está suelto ni en un fichero de texto: cada llamada se compone en código con tres
+      capas —sistema, instrucciones de la tarea y mensaje de usuario generado por plantilla— más las
+      herramientas y el esquema de salida.</p>
+      <div class="where"><b>Dónde:</b> <code>render_agent_prompt()</code>, <code>*_INSTRUCTIONS</code></div>
+    </div>
+
+    <div class="card p">
+      <h4>La herramienta también es prompt</h4>
+      <p class="en">tool description as instruction</p>
+      <p>La descripción y el JSON Schema de cada <code>ToolSpec</code> son lo único que el modelo tiene para
+      decidir cuándo usarla. Cambiar esa frase cambia el comportamiento tanto como editar el prompt.</p>
+      <div class="where"><b>Dónde:</b> <code>ToolSpec</code> → <code>tools</code> / <code>input_schema</code></div>
+    </div>
+
+    <div class="card g">
+      <h4>Grounding / anclaje a hechos</h4>
+      <p class="en">grounding</p>
+      <p>Los números los produce código determinista (SMA, RSI, MACD, ATR, volatilidad, drawdown). El modelo
+      solo puede argumentar con hechos que existen en <code>known_facts</code>.</p>
+      <div class="where"><b>Dónde:</b> <code>services/indicators.py</code></div>
+    </div>
+
+    <div class="card g">
+      <h4>Mitigación de alucinaciones</h4>
+      <p class="en">hallucination guard</p>
+      <p>Toda cifra del texto generado debe existir en los hechos; si no, la frase se descarta y se
+      reconstruye con la evidencia validada. Los porcentajes no se eximen.</p>
+      <div class="where"><b>Dónde:</b> <code>validate_agent_output()</code></div>
+    </div>
+
+    <div class="card g">
+      <h4>Guardarraíles</h4>
+      <p class="en">guardrails</p>
+      <p>Reglas de negocio que corrigen la salida del modelo <em>después</em> de validarla: T1–T3, R1, S1,
+      G1–G4. Cada corrección se publica como evento con <code>before</code> y <code>after</code>.</p>
+      <div class="where"><b>Dónde:</b> <code>guardrail_applied</code></div>
+    </div>
+
+    <div class="card g">
+      <h4>Degradación elegante</h4>
+      <p class="en">graceful degradation / fallback</p>
+      <p>Si el proveedor falla, se agotan los pasos o la salida es inválida, el agente cae al camino
+      determinista (<code>rules_fallback</code>) y lo deja anotado. El sistema nunca se bloquea por el LLM.</p>
+      <div class="where"><b>Dónde:</b> <code>LLMError</code> → modo reglas</div>
+    </div>
+
+    <div class="card a">
+      <h4>Debate y crítica entre agentes</h4>
+      <p class="en">multi-agent debate / self-critique</p>
+      <p>El escéptico busca contraargumentos y reta al técnico, que puede mantener (<code>maintains</code>) o
+      ceder (<code>concedes</code>). El desacuerdo es información: baja la confianza final (guardarraíl G3).</p>
+      <div class="where"><b>Dónde:</b> <code>find_counterarguments()</code>, <code>disagreement</code></div>
+    </div>
+
+    <div class="card a">
+      <h4>Ventana de contexto local</h4>
+      <p class="en">per-agent context, no shared memory</p>
+      <p>Cada agente tiene su propia lista de <code>ChatMessage</code>; nunca se comparte. Lo único que
+      un agente exporta es su mensaje de salida. Esto acota el contexto y evita contaminación cruzada.</p>
+      <div class="where"><b>Dónde:</b> <code>messages</code> local en <code>run_agent_loop</code></div>
+    </div>
+
+    <div class="card a">
+      <h4>Paso por referencia</h4>
+      <p class="en">artifact reference / blackboard</p>
+      <p>Las series de precios no viajan en los mensajes: se dejan en <code>ctx.data[data_ref]</code> y el
+      mensaje lleva la referencia y un resumen. Es el patrón estándar para no inflar el contexto.</p>
+      <div class="where"><b>Dónde:</b> <code>data_ref</code>, <code>AgentContext.data</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Abstracción de proveedor</h4>
+      <p class="en">provider abstraction / model-agnostic</p>
+      <p>Una interfaz (<code>complete_json</code>, <code>chat</code>) y tres implementaciones: mock,
+      OpenRouter y Anthropic. Cambiar de modelo es configuración, no refactor.</p>
+      <div class="where"><b>Dónde:</b> <code>providers/</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Determinismo para pruebas</h4>
+      <p class="en">mock provider / deterministic testing</p>
+      <p><code>MockLLMProvider</code> llama las herramientas en el orden esperado y decide con las mismas
+      reglas: la <em>forma</em> de la traza es idéntica con o sin red. Se puede enseñar y testear sin claves.</p>
+      <div class="where"><b>Dónde:</b> <code>mock_llm_provider.py</code></div>
+    </div>
+
+    <div class="card">
+      <h4>Control de concurrencia</h4>
+      <p class="en">throttling / backpressure</p>
+      <p>Un semáforo limita símbolos en paralelo y otro (<code>ThrottledLLMProvider</code>) limita llamadas
+      simultáneas al modelo. Sin esto, un lote de símbolos dispara errores 429.</p>
+      <div class="where"><b>Dónde:</b> <code>max_parallel_symbols</code>, <code>LLM_MAX_CONCURRENCY</code></div>
+    </div>
+
+    <div class="card r">
+      <h4>Observabilidad y trazabilidad</h4>
+      <p class="en">event sourcing / LLM tracing</p>
+      <p>Cada llamada, herramienta, aviso y decisión emite un evento numerado (<code>seq</code>). La UI no
+      recibe estado: lo <em>deriva</em> de los eventos. Auditar el sistema es leer la traza.</p>
+      <div class="where"><b>Dónde:</b> <code>EventBus</code>, <code>frontend/lib/trace.ts</code></div>
+    </div>
+
+    <div class="card r">
+      <h4>Contabilidad de tokens y coste</h4>
+      <p class="en">LLM FinOps</p>
+      <p>Cada <code>llm_call_completed</code> lleva tokens y USD; <code>summarize_costs()</code> agrega por
+      agente. Permite responder "¿quién gasta más?" —normalmente el agente de riesgo, con 3–4 turnos.</p>
+      <div class="where"><b>Dónde:</b> <code>services/costs.py</code></div>
+    </div>
+
+    <div class="card r">
+      <h4>Reproducibilidad / replay</h4>
+      <p class="en">deterministic replay</p>
+      <p>Al conectar el WebSocket se reenvía el historial completo y el cliente deduplica por <code>seq</code>.
+      Reabrir una ejecución pasada es indistinguible de haberla visto en directo.</p>
+      <div class="where"><b>Dónde:</b> <code>lib/websocket.ts → mergeEvents</code></div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ================= MODOS ================= -->
+<section id="modos">
+  <h2><span class="num">02</span>Los dos modos: quién decide y quién redacta</h2>
+  <p class="sub">Es la distinción más importante del proyecto y la que mejor explica la filosofía: el LLM se
+  usa donde aporta (lenguaje, criterio, exploración) y no donde no aporta (aritmética, umbrales, política).</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th style="width:24%">Dimensión</th><th style="width:38%">Modo <code>rules</code></th><th style="width:38%">Modo <code>llm</code></th></tr></thead>
+    <tbody>
+      <tr><td><b>Quién decide</b></td><td>La regla determinista (<code>rule_stance</code>, <code>rule_risk_level</code>, <code>decide</code>).</td><td>El modelo propone; las reglas quedan como referencia y guardarraíl.</td></tr>
+      <tr><td><b>Papel del LLM</b></td><td>Redactor: convierte hechos en una explicación legible.</td><td>Razonador: elige herramientas, pide datos, argumenta y concluye.</td></tr>
+      <tr><td><b>Llamadas al modelo</b></td><td>Una por agente (<code>complete_json</code>).</td><td>Varias por agente (<code>chat</code> en bucle, hasta <code>AGENT_MAX_STEPS</code>).</td></tr>
+      <tr><td><b>Herramientas</b></td><td>No se usan: los hechos ya vienen calculados.</td><td><code>compute_indicators</code>, <code>compute_risk_metrics</code>, <code>request_history</code>, <code>challenge_technical</code>.</td></tr>
+      <tr><td><b>Validación</b></td><td><code>validate_explanation()</code>: el texto no puede citar números ausentes.</td><td><code>validate_agent_output()</code>: enumerados, evidencias, confianza y números.</td></tr>
+      <tr><td><b>Coste y latencia</b></td><td>Bajo y previsible.</td><td>Varias veces mayor; el agente de riesgo suele ser el más caro.</td></tr>
+      <tr><td><b>Determinismo</b></td><td>Alto: misma entrada, misma decisión.</td><td>Bajo por diseño; por eso existen los guardarraíles y <code>rule_reference</code>.</td></tr>
+      <tr><td><b>Cuándo usarlo</b></td><td>Demos, tests de regresión, comparación, entornos sin red.</td><td>Mostrar razonamiento genuino, exploración de datos, debate entre agentes.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note blue"><b>La idea que hay que llevarse:</b> las reglas nunca desaparecen. O deciden, o vigilan.
+  Y como cada opinión guarda <code>rule_reference</code>, siempre se puede comparar en la misma pantalla lo que
+  dijo el modelo con lo que habrían dicho las reglas —sin repetir la ejecución.</div>
+</section>
+
+<!-- ================= BUCLE ================= -->
+<section id="bucle">
+  <h2><span class="num">03</span>El bucle agéntico, en detalle</h2>
+  <p class="sub">Así razona un agente en modo <code>llm</code>. El ejemplo es el agente de riesgo, que es el
+  único que además <em>habla con otro agente desde dentro de una herramienta</em>.</p>
+
+  <figure>
+    <svg viewBox="0 0 880 400" role="img" aria-label="Diagrama del bucle agéntico">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="ui-sans-serif,system-ui,sans-serif" font-size="13" fill="currentColor" color="currentColor">
+
+        <rect x="20" y="150" width="150" height="100" rx="12" fill="var(--accent-soft)" stroke="var(--accent)" stroke-width="1.5"/>
+        <text x="95" y="185" text-anchor="middle" font-weight="700" fill="var(--accent-ink)">Agente</text>
+        <text x="95" y="205" text-anchor="middle" font-size="11.5" fill="var(--ink-2)">risk</text>
+        <text x="95" y="225" text-anchor="middle" font-size="11" fill="var(--ink-3)">run_agent_loop()</text>
+
+        <rect x="350" y="40" width="180" height="86" rx="12" fill="var(--purple-soft)" stroke="var(--purple)" stroke-width="1.5"/>
+        <text x="440" y="72" text-anchor="middle" font-weight="700" fill="var(--purple)">Modelo (LLM)</text>
+        <text x="440" y="92" text-anchor="middle" font-size="11.5" fill="var(--ink-2)">LLMProvider.chat()</text>
+        <text x="440" y="110" text-anchor="middle" font-size="11" fill="var(--ink-3)">decide qué herramienta usar</text>
+
+        <rect x="350" y="274" width="180" height="86" rx="12" fill="var(--green-soft)" stroke="var(--green)" stroke-width="1.5"/>
+        <text x="440" y="306" text-anchor="middle" font-weight="700" fill="var(--green)">Herramientas</text>
+        <text x="440" y="326" text-anchor="middle" font-size="11.5" fill="var(--ink-2)">código Python determinista</text>
+        <text x="440" y="344" text-anchor="middle" font-size="11" fill="var(--ink-3)">compute_risk_metrics …</text>
+
+        <rect x="690" y="274" width="170" height="86" rx="12" fill="var(--amber-soft)" stroke="var(--amber)" stroke-width="1.5"/>
+        <text x="775" y="306" text-anchor="middle" font-weight="700" fill="var(--amber)">Otro agente</text>
+        <text x="775" y="326" text-anchor="middle" font-size="11.5" fill="var(--ink-2)">market_data</text>
+        <text x="775" y="344" text-anchor="middle" font-size="11" fill="var(--ink-3)">vía deliver()</text>
+
+        <rect x="690" y="40" width="170" height="86" rx="12" fill="var(--panel-2)" stroke="var(--line)" stroke-width="1.5"/>
+        <text x="775" y="72" text-anchor="middle" font-weight="700">Salida validada</text>
+        <text x="775" y="92" text-anchor="middle" font-size="11.5" fill="var(--ink-2)">opinion {risk_level…}</text>
+        <text x="775" y="110" text-anchor="middle" font-size="11" fill="var(--ink-3)">+ guardarraíles</text>
+
+        <g stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ar)" opacity=".75">
+          <path d="M120,150 C130,95 250,83 344,83"/>
+          <path d="M440,132 L440,268" />
+          <path d="M350,317 C260,317 150,300 130,254"/>
+          <path d="M530,83 L684,83"/>
+          <path d="M530,317 L684,317"/>
+        </g>
+        <path d="M690,300 C620,270 560,200 536,120" stroke="currentColor" stroke-width="1.6" fill="none" marker-end="url(#ar)" opacity=".45" stroke-dasharray="5 4"/>
+
+        <g font-size="11.5" fill="var(--ink-3)">
+          <text x="152" y="124">1 · instrucciones + hechos</text>
+          <text x="152" y="140">+ esquema JSON + tools</text>
+          <text x="452" y="205">2 · tool_call</text>
+          <text x="150" y="330">3 · tool result → vuelve al modelo</text>
+          <text x="560" y="72">último turno</text>
+          <text x="548" y="307">request_history</text>
+          <text x="590" y="215" transform="rotate(-42 590 215)">info_response</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>El modelo nunca toca los datos: pide herramientas. Una de esas herramientas es "hablarle a otro agente",
+    y esa decisión se materializa como un <code>AgentMessage</code> visible en la traza.</figcaption>
+  </figure>
+
+  <h3>Qué se emite en cada vuelta</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th style="width:30%">Evento</th><th>Contenido y para qué sirve</th></tr></thead>
+    <tbody>
+      <tr><td><code>llm_call_started</code></td><td>Marca el turno (<code>step</code>) y el agente. Permite ver la profundidad del razonamiento.</td></tr>
+      <tr><td><code>llm_call_completed</code></td><td>Tokens de entrada/salida y coste en USD. Es la materia prima del panel de consumo.</td></tr>
+      <tr><td><code>tool_called</code></td><td>Nombre, argumentos y resultado de la herramienta. Es la prueba de qué miró el modelo.</td></tr>
+      <tr><td><code>validation_warning</code></td><td>Algo se corrigió silenciosamente (evidencia inexistente, número no anclado, confianza fuera de rango).</td></tr>
+      <tr><td><code>guardrail_applied</code></td><td>Una regla sobreescribió al modelo: <code>rule</code>, <code>before</code>, <code>after</code>, <code>reason</code>.</td></tr>
+      <tr><td><code>message_sent</code></td><td>Un <code>AgentMessage</code> completo. Si una herramienta habló con otro agente, aparece aquí.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ================= PROMPTS ================= -->
+<section id="prompts">
+  <h2><span class="num">04</span>Anatomía de un prompt</h2>
+  <p class="sub">No hay prompts sueltos ni plantillas externas: cada llamada al modelo se compone en código, por
+  capas. Saber cuáles son —y cuál hay que tocar cuando algo sale mal— es media hora de lectura que ahorra días.</p>
+
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th style="width:16%">Nivel</th><th style="width:22%">Dónde vive</th><th style="width:44%">Qué contiene</th><th style="width:18%">Cuándo se usa</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><b>Sistema</b></td>
+        <td><code>llm_provider.py</code> → <code>SYSTEM_PROMPT</code></td>
+        <td>Rol ("componente de una demo educativa") y reglas: usar solo <code>&lt;facts&gt;</code>, no inventar
+        números, <b>no cambiar la postura que fijó la regla</b>, sin lenguaje imperativo, responder en español con
+        el JSON pedido.</td>
+        <td>modo <code>rules</code><br><span style="color:var(--ink-3);font-size:13px">(<code>explain</code>)</span></td>
+      </tr>
+      <tr>
+        <td><b>Sistema</b></td>
+        <td><code>llm_provider.py</code> → <code>AGENT_SYSTEM_PROMPT</code></td>
+        <td>Rol de agente dentro de un sistema multiagente; datos válidos = <code>&lt;facts&gt;</code> + resultados
+        de herramientas; consultar herramientas <em>antes</em> de fijar postura; cada <code>evidence</code> cita el
+        nombre exacto de un hecho; la confianza refleja cuántas evidencias coinciden (señales mixtas →
+        NEUTRAL / ESPERAR); no es asesoramiento; el último mensaje es solo el JSON.</td>
+        <td>modo <code>llm</code><br><span style="color:var(--ink-3);font-size:13px">(<code>run_agent_loop</code>)</span></td>
+      </tr>
+      <tr>
+        <td><b>Instrucciones de tarea</b></td>
+        <td>cada <code>agents/*.py</code> → <code>RULES_INSTRUCTIONS</code>, <code>LLM_INSTRUCTIONS</code>,
+        <code>CHALLENGE_INSTRUCTIONS</code></td>
+        <td>Qué debe hacer <em>ese</em> agente en <em>esa</em> tarea: qué indicadores mirar, qué herramienta invocar
+        primero, qué criterios aplicar. El escéptico, por ejemplo: "si hay objeciones, DEBES enviarlas con
+        <code>challenge_technical</code> y leer la respuesta antes de concluir".</td>
+        <td>según agente y modo</td>
+      </tr>
+      <tr>
+        <td><b>Mensaje de usuario</b></td>
+        <td><code>render_agent_prompt()</code> y <code>_render_user_prompt()</code> de cada proveedor</td>
+        <td>Plantilla fija generada por código: <code>Tarea</code>, <code>Instrucciones</code>, bloque
+        <code>&lt;facts&gt;</code> con el JSON de hechos y el <b>esquema JSON de la respuesta</b>.</td>
+        <td>todas las llamadas</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h3>Dos cosas que no son texto libre y condicionan igual</h3>
+  <div class="grid">
+    <div class="card p">
+      <h4>Definiciones de herramientas</h4>
+      <p class="en">tool specs</p>
+      <p>Nombre, descripción y JSON Schema de argumentos, enviados como <code>tools</code> (OpenAI/OpenRouter) o
+      <code>tools</code> con <code>input_schema</code> (Claude). Si el modelo no llama a una herramienta cuando
+      debería, lo primero a revisar es su descripción, no el prompt de sistema.</p>
+      <div class="where"><b>Dónde:</b> <code>ToolSpec</code> en <code>llm_provider.py</code></div>
+    </div>
+    <div class="card p">
+      <h4>Esquemas de salida</h4>
+      <p class="en">output schemas</p>
+      <p><code>TECH_SCHEMA</code>, <code>RISK_SCHEMA</code>, <code>SKEPTIC_SCHEMA</code>,
+      <code>DECISION_SCHEMA</code>, <code>EXPLANATION_SCHEMA</code>. Van como formato forzado si el proveedor lo
+      soporta y, <em>siempre</em>, incrustados en el mensaje de usuario: cinturón y tirantes.</p>
+      <div class="where"><b>Dónde:</b> cada <code>agents/*.py</code></div>
+    </div>
+  </div>
+
+  <h3>Ejemplo real: lo que recibe el agente de riesgo en modo <code>llm</code></h3>
+<pre><code>Tarea: risk_analysis
+
+Instrucciones:
+Eres el analista de riesgo. Debes asignar un nivel de riesgo (BAJO, MEDIO o ALTO) a la
+serie descrita en &lt;facts&gt;. Invoca `compute_risk_metrics` para obtener volatilidad
+anualizada, drawdown máximo y ATR relativo (no los estimes). Si `bars_used` es inferior
+a `min_bars_recommended`, ... pide historial ampliado con `request_history` ... Cita
+cada métrica usada en `evidence` con su nombre exacto.
+
+&lt;facts&gt;
+{ "symbol": "NVDA", "data_ref": "NVDA:130", "bars": 92, "first_date": "2026-04-15",
+  "last_date": "2026-08-21", "last_close": 215.83, "min_bars_recommended": 200,
+  "extended_history_days": 365 }
+&lt;/facts&gt;
+
+Cuando hayas terminado de usar herramientas, responde ÚNICAMENTE con un objeto JSON que
+cumpla este esquema:
+{"type": "object", "properties": {
+   "risk_level": {"enum": ["BAJO","MEDIO","ALTO"]},
+   "confidence": ..., "evidence": ..., "summary": ..., "caveats": ...}, ...}</code></pre>
+
+  <p>Fijate en lo que <b>no</b> hay: ni ejemplos de salida (<em>few-shot</em>), ni cadena de razonamiento forzada,
+  ni una lista de veinte reglas defensivas. Tarea, instrucciones, hechos y formato.</p>
+
+  <div class="note blue"><b>Por qué los prompts son cortos y poco prescriptivos:</b> la disciplina del sistema no
+  descansa en que el modelo obedezca una lista larga de reglas, sino en la arquitectura. Los números solo llegan por
+  herramientas, la validación descarta lo que no está en los hechos y los guardarraíles corrigen las salidas dudosas.
+  El prompt explica la tarea; el código garantiza el resto. Efecto secundario valioso: cambiar de modelo (mock,
+  OpenRouter, Claude) no obliga a reescribir prompts.</div>
+
+  <h3>Qué queda de todo esto en la traza</h3>
+  <div class="tablewrap">
+  <table>
+    <thead><tr><th style="width:32%">Se registra</th><th>Detalle</th></tr></thead>
+    <tbody>
+      <tr><td><b>Sí</b> — en <code>llm_call_started</code></td><td>La tarea, el proveedor, las herramientas ofrecidas y las <b>claves</b> de los hechos enviados.</td></tr>
+      <tr><td><b>Sí</b> — en <code>tool_called</code></td><td>Argumentos y resultado de cada herramienta: la prueba de qué miró realmente el modelo.</td></tr>
+      <tr><td><b>No</b> — el texto del prompt</td><td>Se omite por volumen. Se puede reconstruir qué vio el modelo, pero no palabra por palabra.</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div class="note"><b>Consecuencia práctica:</b> si cambiás un prompt y el comportamiento se mueve, la traza te dice
+  qué herramientas se ofrecieron y qué hechos había, pero no el texto exacto que se envió. Por eso versionar los
+  prompts y registrar esa versión en <code>llm_call_started</code> aparece en las oportunidades de mejora.</div>
+</section>
+
+<!-- ================= ANTI ALUCINACION ================= -->
+<section id="anti">
+  <h2><span class="num">05</span>La cadena anti-alucinación</h2>
+  <p class="sub">Cuatro filtros en serie. Ninguno confía en el anterior, y el último siempre es determinista.</p>
+
+<pre><code>1 · HECHOS      indicators.py calcula los números → known_facts
+                (el modelo nunca ve datos crudos sin procesar)
+        │
+        ▼
+2 · ESQUEMA     la respuesta debe encajar en el JSON Schema del agente
+                enum inválido  →  hard error  →  se descarta TODA la salida
+        │
+        ▼
+3 · VALIDACIÓN  validate_agent_output(clean, warnings, hard_errors)
+                · evidencia que no existe en known_facts   → se elimina
+                · confianza fuera de [0,1]                 → se acota
+                · número en el texto sin hecho detrás      → texto reconstruido
+        │
+        ▼
+4 · GUARDARRAÍL regla de negocio con la última palabra
+                T1 · postura opuesta a las reglas con &lt;2 evidencias → NEUTRAL
+                R1 · riesgo 2 niveles por debajo de las reglas      → nivel de reglas
+                G1 · COMPRA con riesgo ALTO                         → ESPERAR
+                G3 · escéptico discrepa y técnico mantiene          → confianza ≤ 0.5
+        │
+        ▼
+   SALIDA + rule_reference  ("qué habrían dicho las reglas")</code></pre>
+
+  <div class="note"><b>Por qué importa:</b> este es exactamente el patrón que se pide en producción cuando un LLM
+  toca decisiones con consecuencias. El modelo aporta lenguaje y criterio; el código aporta los números y el
+  límite. Y todo desacuerdo entre ambos queda registrado en lugar de esconderse.</div>
+</section>
+
+<!-- ================= QA ================= -->
+<section id="qa">
+  <h2><span class="num">06</span>Preguntas y respuestas sobre la aplicación</h2>
+  <p class="sub">Las 38 preguntas que aparecen al leer el código por primera vez —y las que conviene saber
+  responder en una revisión técnica. Filtrá por tema.</p>
+
+  <div class="filters" id="filters">
+    <button aria-pressed="true" data-f="all">Todas</button>
+    <button aria-pressed="false" data-f="arq">Arquitectura</button>
+    <button aria-pressed="false" data-f="llm">LLM y agentes</button>
+    <button aria-pressed="false" data-f="pro">Prompts</button>
+    <button aria-pressed="false" data-f="val">Validación</button>
+    <button aria-pressed="false" data-f="ui">Frontend</button>
+    <button aria-pressed="false" data-f="ops">Operación</button>
+  </div>
+
+  <div id="qalist">
+
+  <details class="qa" data-c="arq"><summary>1. ¿Por qué todos los mensajes tienen que pasar por <code>deliver()</code>?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Porque es el único punto donde un mensaje se hace observable. <code>deliver()</code> emite el
+  mensaje al bus <em>antes</em> de entregarlo, aplica la latencia simulada y emite también la respuesta. Si un agente
+  llamara a <code>otro.process()</code> directamente, el intercambio funcionaría pero no existiría para la UI, la
+  auditoría ni el cálculo de costes: sería un canal lateral invisible.</p>
+  <p>Es una decisión de observabilidad, no de estilo: la garantía "todo lo que ocurrió está en la traza" solo se
+  sostiene si el canal es único.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>2. ¿Por qué el orquestador aparece en el enum <code>AgentName</code> si no es un <code>BaseAgent</code>?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Porque también envía y recibe mensajes: es emisor de los <code>task_request</code> y receptor de
+  las <code>opinion</code> y la <code>decision</code>. Para que la UI pueda dibujar la arista, el remitente necesita un
+  nombre válido. Lo que no tiene es <code>process()</code>: no se le puede pedir una tarea, él las reparte.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>3. ¿Cuál es la diferencia real entre un mensaje y un evento?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Un <b>mensaje</b> es acción: cambia el estado de la conversación, alguien lo tiene que responder.
+  Un <b>evento</b> es observación: cuenta que algo pasó y nadie lo responde.</p>
+  <p>La relación es de contención: cada mensaje genera un evento <code>message_sent</code> que lo lleva entero dentro
+  (<code>event.message</code>). Pero hay eventos sin mensaje (<code>llm_call_started</code>, <code>tool_called</code>,
+  <code>guardrail_applied</code>). Por eso la traza de eventos es un superconjunto de la conversación.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>4. ¿Por qué <code>POST /api/runs</code> devuelve 202 y no el resultado?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Porque crear una ejecución y observarla son cosas distintas. Un análisis con LLM puede tardar
+  decenas de segundos; bloquear la petición HTTP daría timeouts y haría imposible el streaming. Con 202 + <code>run_id</code>,
+  el cliente abre el WebSocket y ve la conversación desarrollarse, puede desconectarse y volver, y puede seguir varias
+  ejecuciones a la vez.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>5. ¿Cómo se logra el paralelismo y por qué hay un semáforo?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Cada símbolo es una corrutina independiente lanzada con <code>asyncio.gather</code>. El semáforo
+  (<code>max_parallel_symbols</code>, 3 por defecto) limita cuántas avanzan a la vez.</p>
+  <p>Sirve para dos cosas: proteger al proveedor de datos y al LLM de una ráfaga de peticiones, y mantener la demo
+  legible —veinte símbolos simultáneos convierten el grafo en ruido.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>6. ¿Por qué los agentes no pueden guardar estado en <code>self</code>?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Porque hay <b>una sola instancia de cada agente compartida entre todos los símbolos</b>. Si
+  <code>RiskAgent</code> guardara el símbolo actual en <code>self.symbol</code>, dos conversaciones concurrentes se
+  pisarían de forma no determinista y casi imposible de reproducir.</p>
+  <p>El estado por tarea vive en variables locales y cierres —mirá <code>RiskAgent._analyze_llm → state</code>, que es
+  justamente el patrón a imitar.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>7. ¿Qué es <code>data_ref</code> y por qué no se mandan los datos directamente?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Es un puntero a una serie de precios guardada en <code>ctx.data</code>. Si las 130 o 252 velas
+  viajaran en el <code>payload</code>, cada evento <code>message_sent</code> pesaría cientos de kilobytes: la traza
+  dejaría de ser legible, el WebSocket se saturaría y los JSON de <code>backend/runs/</code> serían inmanejables.</p>
+  <p>El mensaje lleva la referencia más un resumen (<code>bars</code>, <code>last_close</code>), que es lo que un humano
+  necesita para entender el intercambio.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>8. ¿Cómo se reconstruye un hilo de conversación?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Con <code>in_reply_to</code>. Cada respuesta lleva el <code>id</code> de la petición que la originó,
+  y la regla es estricta: <b>una petición, exactamente una respuesta</b>. El inspector de la UI usa ese campo para mostrar
+  el enlace "responde a" y permitir navegar el hilo hacia atrás.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>9. ¿Qué pasa si un símbolo falla a mitad del análisis?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Hay dos redes. La primera es <code>error_reply()</code>: un agente que no puede hacer su trabajo
+  responde con un mensaje de tipo <code>error</code> (con <code>code</code> y <code>reason</code>), que el flujo trata como
+  un resultado válido —típicamente termina en <code>NO_ANALIZABLE</code>.</p>
+  <p>La segunda es <code>guarded()</code>, un <code>try/except</code> de último recurso alrededor de
+  <code>analyze_symbol()</code>. Un símbolo <em>nunca</em> se queda sin resultado y un fallo no arrastra a los demás.</p></div></details>
+
+  <details class="qa" data-c="arq"><summary>10. Quiero cambiar el orden de la conversación. ¿Dónde toco?<span class="tag">Arquitectura</span></summary>
+  <div class="body"><p>Solo en <code>Orchestrator.analyze_symbol()</code>. Es el único sitio donde está escrito quién habla
+  con quién y en qué orden. Los agentes no saben quién viene después de ellos, así que reordenar el guion no obliga a
+  tocarlos.</p>
+  <p>La excepción son las comunicaciones directas (<code>risk → market_data</code>, <code>skeptic → technical</code>):
+  esas viven dentro del agente que las inicia.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>11. En modo <code>rules</code>, ¿para qué se usa el LLM?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Solo como redactor. La postura ya la fijó la regla <em>antes</em> de llamar al modelo, y el prompt
+  se lo dice explícitamente: "no cambies la postura; solo explícala". El modelo recibe un diccionario de hechos y devuelve
+  <code>{summary, facts_used, caveats}</code>.</p>
+  <p>Si la explicación cita un número que no está en los hechos, se descarta y se usa una plantilla determinista
+  (<code>generated_by: rules</code>). El resultado nunca depende del modelo.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>12. ¿Cómo decide el modelo llamar a una herramienta?<span class="tag">LLM</span></summary>
+  <div class="body"><p>El agente le pasa la lista de herramientas disponibles como <code>ToolSpec</code>: nombre,
+  descripción en lenguaje natural y JSON Schema de argumentos. El modelo responde con <code>tool_calls</code> en lugar de
+  texto; el agente ejecuta el <code>handler</code> correspondiente y devuelve el resultado como mensaje de rol
+  <code>tool</code>. El ciclo se repite hasta que el modelo responde con el JSON final o se alcanza
+  <code>AGENT_MAX_STEPS</code>.</p>
+  <p>La calidad de la descripción de la herramienta es literalmente parte del prompt: es lo único que el modelo tiene para
+  decidir cuándo usarla.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>13. ¿Cómo puede una herramienta convertirse en un mensaje entre agentes?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Porque el <code>handler</code> es una corrutina Python normal y puede hacer lo que quiera —incluido
+  <code>await self.send(market_data, info_request)</code>. Eso es <code>request_history</code>; y
+  <code>challenge_technical</code> hace lo mismo hacia el técnico.</p>
+  <p>El efecto es elegante: el modelo "decide hablar con alguien", y esa decisión se materializa como un
+  <code>AgentMessage</code> corriente que pasa por <code>deliver()</code> y se ve en el grafo igual que cualquier otro.
+  No hay un canal especial para el LLM.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>14. ¿Los agentes comparten la conversación con el modelo?<span class="tag">LLM</span></summary>
+  <div class="body"><p>No. Cada agente tiene su propia lista <code>messages</code> en memoria, local a la llamada. Lo único
+  que un agente exporta es su <code>AgentMessage</code> de salida.</p>
+  <p>Esto es deliberado: mantiene el contexto pequeño (más barato y más preciso), evita que el razonamiento de uno
+  contamine al otro, y hace que el escéptico juzgue <em>la conclusión</em> del técnico, no su monólogo interno.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>15. ¿Qué pasa si el modelo entra en bucle o el proveedor falla?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Si se superan <code>AGENT_MAX_STEPS</code> turnos sin JSON final, o el proveedor devuelve un error,
+  se lanza <code>LLMError</code> y el agente <b>cae al camino determinista</b>, marcando la salida como
+  <code>mode: rules_fallback</code>.</p>
+  <p>La ejecución nunca se bloquea por el LLM, y el fallback queda anotado: es una métrica útil —una tasa alta de
+  <code>rules_fallback</code> indica un prompt o un esquema mal diseñado.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>16. ¿Cómo se garantiza que la salida sea JSON válido?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Con una cascada de degradación por proveedor. <code>OpenRouterProvider</code> intenta
+  <code>response_format: json_schema</code>, y si el modelo no lo soporta baja a <code>json_object</code> y finalmente a
+  texto parseado. <code>AnthropicProvider</code> usa <code>output_config.format</code>.</p>
+  <p>Y por encima está la validación: un JSON sintácticamente correcto pero con un enumerado inválido
+  (<code>stance: "MUY ALCISTA"</code>) es un <em>hard error</em> y se descarta igual.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>17. ¿Cómo se calcula el coste de una ejecución?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Cada <code>llm_call_completed</code> lleva su <code>usage</code> con tokens y USD;
+  <code>summarize_costs()</code> los agrega por agente al terminar. OpenRouter suele dar el coste exacto
+  (<code>usage.cost</code>) o se estima por catálogo; Anthropic se estima con una tabla de precios; el mock cuenta 0 y
+  aproxima tokens como caracteres/4.</p>
+  <p>Como el coste sale de los eventos y no de un contador aparte, siempre cuadra con lo que se ve en la traza.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>18. ¿Por qué existe <code>MockLLMProvider</code> si hay proveedores reales?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Por tres razones. Permite ejecutar la demo sin claves ni red. Hace los tests deterministas y
+  gratis. Y, sobre todo, produce una traza con <b>la misma forma</b> que la real: llama a las herramientas en el orden
+  esperado y decide con las mismas reglas.</p>
+  <p>Ese último punto es el que hace que el proyecto enseñe el protocolo y no un modelo concreto.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>19. ¿Para qué sirve <code>ThrottledLLMProvider</code>?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Envuelve al proveedor real con un semáforo (<code>LLM_MAX_CONCURRENCY</code>). Con 3 símbolos en
+  paralelo y hasta 4 agentes usando el modelo, es fácil superar el límite de peticiones por minuto del proveedor. El
+  semáforo pone las llamadas en cola en lugar de coleccionar errores 429.</p></div></details>
+
+  <details class="qa" data-c="llm"><summary>20. ¿Cómo cambio de proveedor o de modelo?<span class="tag">LLM</span></summary>
+  <div class="body"><p>Por configuración (<code>config.py</code>). Todos implementan la misma interfaz —
+  <code>complete_json()</code> y <code>chat()</code>— así que ni el orquestador ni los agentes cambian.</p>
+  <p>Eso sí: cambiar de modelo cambia el comportamiento en modo <code>llm</code>. La forma honesta de comparar es correr
+  el mismo lote de símbolos con dos modelos y mirar la tasa de guardarraíles aplicados y de desacuerdo con
+  <code>rule_reference</code>.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>21. ¿Dónde están los prompts? No veo ficheros <code>.txt</code> ni plantillas<span class="tag">Prompts</span></summary>
+  <div class="body"><p>Están todos en código, en tres capas: los prompts de sistema (<code>SYSTEM_PROMPT</code> y
+  <code>AGENT_SYSTEM_PROMPT</code>) en <code>providers/llm_provider.py</code>; las instrucciones de tarea
+  (<code>RULES_INSTRUCTIONS</code>, <code>LLM_INSTRUCTIONS</code>, <code>CHALLENGE_INSTRUCTIONS</code>) en cada
+  <code>agents/*.py</code>; y el mensaje de usuario, que lo genera <code>render_agent_prompt()</code> a partir de una
+  plantilla fija.</p>
+  <p>La ventaja es que un prompt no se puede cambiar sin pasar por revisión de código. La desventaja es que no están
+  versionados de forma independiente ni registrados en la traza —de ahí la mejora propuesta.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>22. ¿Qué diferencia hay entre <code>SYSTEM_PROMPT</code> y <code>AGENT_SYSTEM_PROMPT</code>?<span class="tag">Prompts</span></summary>
+  <div class="body"><p>Son los dos modos. <code>SYSTEM_PROMPT</code> es el del redactor (modo <code>rules</code>): define
+  el rol como componente de una demo educativa y prohíbe explícitamente <b>cambiar la postura que fijó la regla</b>; solo
+  puede explicarla, sin inventar números y sin lenguaje imperativo.</p>
+  <p><code>AGENT_SYSTEM_PROMPT</code> es el del razonador (modo <code>llm</code>): define el rol como agente de un sistema
+  multiagente, establece que los únicos datos válidos son <code>&lt;facts&gt;</code> más los resultados de herramientas,
+  obliga a consultar herramientas antes de fijar postura, exige que cada <code>evidence</code> cite el nombre exacto de un
+  hecho y que el último mensaje sea solo el JSON.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>23. ¿Por qué los prompts son tan cortos? ¿No debería ser más prescriptivo?<span class="tag">Prompts</span></summary>
+  <div class="body"><p>Porque la disciplina no vive en el prompt, vive en la arquitectura. Los números solo entran por
+  herramientas, la validación borra lo que no está en los hechos y los guardarraíles corrigen las conclusiones
+  inaceptables. Añadir veinte reglas defensivas al texto daría una falsa sensación de control: lo que garantiza el
+  comportamiento es el código que hay alrededor.</p>
+  <p>Además tiene un beneficio concreto: prompts cortos y poco específicos de un proveedor hacen que cambiar de modelo
+  (mock, OpenRouter, Claude) no obligue a reescribirlos.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>24. Si el modelo no llama a una herramienta cuando debería, ¿qué toco primero?<span class="tag">Prompts</span></summary>
+  <div class="body"><p>La <b>descripción de la herramienta</b>, no el prompt de sistema. El <code>ToolSpec</code> —nombre,
+  descripción y JSON Schema de argumentos— es literalmente lo único que el modelo tiene para decidir cuándo usarla; en la
+  práctica funciona como parte del prompt.</p>
+  <p>Segundo lugar donde mirar: las instrucciones de tarea del agente, que son las que dicen "invoca X primero". El prompt
+  de sistema es lo último que hay que tocar, porque afecta a todos los agentes a la vez.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>25. ¿Qué es exactamente el bloque <code>&lt;facts&gt;</code>?<span class="tag">Prompts</span></summary>
+  <div class="body"><p>Es la sección del mensaje de usuario que lleva el JSON de hechos ya calculados: símbolo,
+  <code>data_ref</code>, número de velas, fechas, último cierre, y parámetros como <code>min_bars_recommended</code> o
+  <code>extended_history_days</code>.</p>
+  <p>Su papel es doble: le da al modelo su único material factual autorizado, y define el universo contra el que después se
+  validará la salida. Todo número que el modelo escriba y no esté en <code>&lt;facts&gt;</code> ni en un resultado de
+  herramienta se descarta.</p></div></details>
+
+  <details class="qa" data-c="pro"><summary>26. ¿Puedo ver el prompt exacto que se envió en una ejecución guardada?<span class="tag">Prompts</span></summary>
+  <div class="body"><p>No literalmente. El texto íntegro no se guarda en la traza porque sería demasiado voluminoso. Lo que
+  sí queda es suficiente para reconstruir qué vio el modelo: <code>llm_call_started</code> registra la tarea, el proveedor,
+  las herramientas ofrecidas y las <b>claves</b> de los hechos enviados, y <code>tool_called</code> lleva argumentos y
+  resultados.</p>
+  <p>Es un punto débil conocido: si cambiás un prompt entre dos ejecuciones, la traza no te dice cuál se usó en cada una.
+  Registrar una versión o un hash del prompt en <code>llm_call_started</code> lo resolvería con muy poco código.</p></div></details>
+
+  <details class="qa" data-c="val"><summary>27. ¿Cómo se impide que el modelo invente un número?<span class="tag">Validación</span></summary>
+  <div class="body"><p>Los números no los produce el modelo: los calcula <code>services/indicators.py</code> y se acumulan
+  en <code>known_facts</code> (hechos iniciales + resultados de herramientas). Después,
+  <code>validate_agent_output()</code> comprueba que toda cifra del texto exista ahí; si no, la frase se reemplaza por una
+  construida con la evidencia validada.</p>
+  <p>Los porcentajes no se eximen: "subirá un 80 %" sin un hecho <code>0.8</code> detrás se descarta.</p></div></details>
+
+  <details class="qa" data-c="val"><summary>28. ¿Diferencia entre <em>hard error</em> y <em>warning</em>?<span class="tag">Validación</span></summary>
+  <div class="body"><p>Un <b>hard error</b> invalida la salida entera y fuerza el fallback a reglas; el caso típico es un
+  enumerado fuera de vocabulario. Un <b>warning</b> es reparable: se elimina la evidencia inexistente, se acota la
+  confianza a [0,1], se reconstruye el texto. La ejecución sigue, y queda un evento
+  <code>validation_warning</code>.</p>
+  <p>El criterio es simple: si el sistema no puede saber qué quiso decir el modelo, descarta; si puede repararlo sin
+  inventar, repara y lo anota.</p></div></details>
+
+  <details class="qa" data-c="val"><summary>29. ¿En qué se diferencia un guardarraíl de la validación?<span class="tag">Validación</span></summary>
+  <div class="body"><p>La <b>validación</b> es sintáctica y universal: pregunta "¿esta salida es bien formada y está
+  anclada a hechos?". El <b>guardarraíl</b> es semántico y de negocio: pregunta "¿esta conclusión es aceptable?".</p>
+  <p>G1 —"COMPRA con riesgo ALTO → ESPERAR"— no corrige un error de formato: corrige una recomendación que el equipo ha
+  decidido que no quiere emitir, aunque el modelo la argumente bien.</p></div></details>
+
+  <details class="qa" data-c="val"><summary>30. ¿Qué es <code>rule_reference</code> y para qué sirve?<span class="tag">Validación</span></summary>
+  <div class="body"><p>Es lo que las reglas deterministas habrían decidido para esa misma entrada, guardado junto a la
+  opinión del modelo. La UI lo muestra como <code>= reglas</code> (coinciden) o <code>reglas: X</code> (difieren).</p>
+  <p>Da dos cosas gratis: comparación modelo-vs-reglas sin repetir la ejecución, y una métrica de calidad —si el modelo
+  casi siempre coincide, no está aportando; si casi nunca coincide, hay que mirar el prompt o las reglas.</p></div></details>
+
+  <details class="qa" data-c="val"><summary>31. Si el guardarraíl siempre corrige al modelo, ¿no sobra el modelo?<span class="tag">Validación</span></summary>
+  <div class="body"><p>Una tasa alta y sostenida de <code>guardrail_applied</code> es exactamente esa señal, y por eso el
+  evento existe y es medible. Pero conviene mirarlo por regla: T1 disparándose mucho sugiere un prompt que no exige
+  evidencia suficiente; G1 disparándose mucho puede ser correcto (el mercado está volátil).</p>
+  <p>El valor del modelo en este sistema está sobre todo en la explicación, la exploración de datos y el debate —no en
+  ganarle a un umbral.</p></div></details>
+
+  <details class="qa" data-c="ui"><summary>32. ¿Por qué el frontend no tiene estado propio?<span class="tag">Frontend</span></summary>
+  <div class="body"><p>Porque cualquier estado paralelo se desincroniza. La UI recibe una lista de eventos y <em>deriva</em>
+  todo de ella en <code>lib/trace.ts</code>: los símbolos de <code>run_started</code>, el estado de cada nodo de
+  <code>agent_started/completed/error</code>, los resultados de <code>symbol_completed</code>, los costes de
+  <code>llm_call_completed.usage</code>.</p>
+  <p>La consecuencia práctica: si algo no se puede mostrar, no falta código en el frontend, falta un evento en el
+  backend.</p></div></details>
+
+  <details class="qa" data-c="ui"><summary>33. ¿Cómo funciona el replay de una ejecución pasada?<span class="tag">Frontend</span></summary>
+  <div class="body"><p>Al conectar a <code>WS /ws/runs/{id}</code>, el servidor reenvía el historial completo y después
+  sigue con los eventos nuevos. El cliente trata la ráfaga inicial como replay (sin animaciones) y luego anima en vivo.</p>
+  <p>Como el estado se deriva de los eventos, reabrir una ejecución con <code>?run=&lt;id&gt;</code> es indistinguible de
+  haberla visto en directo. Es event sourcing puro.</p></div></details>
+
+  <details class="qa" data-c="ui"><summary>34. ¿Por qué hay que deduplicar por <code>seq</code>?<span class="tag">Frontend</span></summary>
+  <div class="body"><p>Porque el historial y el streaming pueden solaparse: un evento emitido mientras se envía el
+  backlog puede llegar dos veces. Como <code>seq</code> es monótono y único por ejecución,
+  <code>mergeEvents</code> lo usa como clave para deduplicar y ordenar. También permite reconectar sin duplicar la
+  traza.</p></div></details>
+
+  <details class="qa" data-c="ui"><summary>35. Quiero mostrar algo nuevo en la UI. ¿Qué toco?<span class="tag">Frontend</span></summary>
+  <div class="body"><p>Primero preguntá si el dato ya está en algún evento. Si está, es un cambio de
+  <code>lib/trace.ts</code> más el componente. Si no está, el cambio empieza en el backend: añadir el campo al evento
+  existente o crear un tipo de evento nuevo.</p>
+  <p>Lo que nunca hay que hacer es traer el dato por otra vía (un endpoint REST paralelo, un cálculo en el cliente): eso
+  rompe el replay, porque la ejecución guardada dejaría de contener todo lo necesario para reconstruir la pantalla.</p></div></details>
+
+  <details class="qa" data-c="ops"><summary>36. ¿Cómo pruebo el sistema sin claves de API?<span class="tag">Operación</span></summary>
+  <div class="body"><p>Con el proveedor mock de LLM y el de datos de mercado. La traza tiene la misma forma que la real
+  —mismos eventos, mismas herramientas, mismos guardarraíles— y el coste es cero. Es el modo recomendado para el primer
+  día y para los tests de regresión.</p></div></details>
+
+  <details class="qa" data-c="ops"><summary>37. ¿Dónde quedan guardadas las ejecuciones?<span class="tag">Operación</span></summary>
+  <div class="body"><p>En memoria mientras corre (<code>RunStore</code>) y en disco al completarse:
+  <code>backend/runs/&lt;run_id&gt;.json</code> con la ejecución y todos sus eventos. Eso es lo que permite el replay.</p>
+  <p>Es la limitación operativa más clara del diseño actual: no sobrevive a un despliegue con varias instancias, ni tiene
+  política de retención. Está en la lista de mejoras.</p></div></details>
+
+  <details class="qa" data-c="ops"><summary>38. ¿Cómo añado un agente nuevo?<span class="tag">Operación</span></summary>
+  <div class="body"><p>Cuatro pasos: (1) añadir el nombre al enum <code>AgentName</code>; (2) crear la clase heredando de
+  <code>BaseAgent</code> e implementar <code>process()</code>, con su esquema JSON y su regla determinista de
+  referencia; (3) registrarlo en el <code>Orchestrator</code> compartiendo el mismo <code>AgentContext</code>; (4) darle
+  un turno en el guion de <code>analyze_symbol()</code> y decidir quién consume su opinión.</p>
+  <p>En el frontend, idealmente, no hay que tocar nada: el grafo y la traza se construyen a partir de los eventos.</p></div></details>
+
+  </div>
+</section>
+
+<!-- ================= MEJORAS ================= -->
+<section id="mejoras">
+  <h2><span class="num">07</span>Oportunidades de mejora</h2>
+  <p class="sub">Ordenadas por área. Cada punto indica el <b>impacto</b> (qué se gana) y el <b>esfuerzo</b> estimado.
+  Nada de esto es un defecto del proyecto: es la lista natural de "qué haría falta para llevarlo a producción o
+  para que enseñe todavía más".</p>
+
+  <div class="imp">
+    <h4><span class="dot" style="background:var(--red)"></span>Arquitectura y escalabilidad</h4>
+    <p class="k">Lo que hoy funciona perfecto en una máquina y se rompe con dos.</p>
+
+    <div class="item">
+      <h5>Persistencia real en lugar de memoria + JSON</h5>
+      <p><code>RunStore</code> vive en el proceso y vuelca a <code>backend/runs/*.json</code>. Con más de una instancia
+      detrás de un balanceador, un espectador puede conectarse al nodo que no tiene su ejecución. Mover a Redis (estado
+      vivo + pub/sub para el WebSocket) y Postgres o S3 (histórico) resuelve replay y escalado horizontal a la vez.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill me">Esfuerzo medio</span><span class="pill n">Bloqueante para producción</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Ciclo de vida de <code>ctx.data</code></h5>
+      <p>Las series se acumulan en un diccionario en memoria y no se ve una política de liberación. En una sesión larga
+      con muchos símbolos es una fuga silenciosa. Un TTL o un LRU por ejecución, liberado en <code>run_completed</code>,
+      lo cierra.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Timeouts y cancelación por mensaje</h5>
+      <p><code>deliver()</code> espera indefinidamente a que el destinatario responda. Un agente colgado en una llamada de
+      red bloquea su conversación entera. Un <code>asyncio.wait_for</code> por mensaje, que produzca un
+      <code>error</code> canónico al vencer, más cancelación de la ejecución desde la API
+      (<code>DELETE /api/runs/{id}</code>), lo hace robusto.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>El guion como dato, no como código</h5>
+      <p>El flujo está escrito a mano en <code>analyze_symbol()</code>. Extraerlo a una definición declarativa (un grafo
+      de nodos con dependencias) permitiría flujos alternativos, ejecutarlos desde la configuración y —muy valioso para
+      la demo— <em>dibujar el guion antes de correrlo</em>.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill me">Esfuerzo medio</span><span class="pill n">Alto valor didáctico</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Reintentos y cortocircuito por proveedor</h5>
+      <p>Hoy un fallo del LLM cae directo a reglas. Un reintento con espera exponencial ante 429 o 5xx recuperaría muchos
+      casos, y un <em>circuit breaker</em> evitaría castigar a todos los símbolos cuando el proveedor está caído.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>WebSocket con <code>since_seq</code></h5>
+      <p>Al conectar se reenvía el historial completo. En ejecuciones largas eso es una ráfaga innecesaria al
+      reconectar. Aceptar un cursor (<code>?since_seq=N</code>) y comprimir el canal reduce el coste sin cambiar la
+      semántica.</p>
+      <div class="meta"><span class="pill lo">Impacto bajo</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+  </div>
+
+  <div class="imp">
+    <h4><span class="dot" style="background:var(--purple)"></span>Calidad del razonamiento multiagente</h4>
+    <p class="k">Dónde el sistema podría razonar mejor, no solo más.</p>
+
+    <div class="item">
+      <h5>El escéptico debería poder retar a todos</h5>
+      <p>Hoy solo reta al técnico. Permitirle cuestionar también el nivel de riesgo y la decisión final —con el mismo
+      protocolo <code>challenge</code> / respuesta— haría el debate simétrico y expondría un patrón multiagente más
+      general.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Debate de varias rondas con criterio de convergencia</h5>
+      <p>El reto es de un solo turno. Permitir N rondas hasta que no aparezcan objeciones nuevas (o se agote un
+      presupuesto) es el patrón de <em>multi-agent debate</em> completo, y es visualmente espectacular en el grafo.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Autoconsistencia en decisiones de bajo consenso</h5>
+      <p>Cuando el escéptico discrepa, muestrear k salidas del agente de decisión y quedarse con la mayoría
+      (<em>self-consistency</em>) reduce mucho la varianza, a cambio de coste. Aplicarlo solo en los casos dudosos lo hace
+      asequible.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Un agente de contexto cualitativo (RAG)</h5>
+      <p>Todo el sistema es cuantitativo. Un agente de noticias o sentimiento con recuperación de documentos añadiría el
+      concepto que hoy falta —<em>retrieval-augmented generation</em>— y obligaría a extender el anclaje a hechos: citar
+      la fuente, no solo el número.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill hi">Esfuerzo alto</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Bucle de realimentación: ¿acertó?</h5>
+      <p>El sistema decide y olvida. Guardar la decisión y contrastarla con el precio a 5, 20 y 60 sesiones daría una
+      métrica real de calidad y permitiría comparar honestamente <code>rules</code> contra <code>llm</code>. Es la
+      diferencia entre una demo y un experimento.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <div class="imp">
+    <h4><span class="dot" style="background:var(--green)"></span>Fiabilidad del LLM y evaluación</h4>
+    <p class="k">Cómo saber que un cambio de prompt o de modelo mejoró algo.</p>
+
+    <div class="item">
+      <h5>Suite de evaluación con trazas de referencia</h5>
+      <p>Es la carencia más importante. Un conjunto fijo de símbolos con salidas esperadas, ejecutado en CI contra el
+      mock y periódicamente contra el modelo real, midiendo tasa de <code>rules_fallback</code>, de
+      <code>guardrail_applied</code>, de <code>validation_warning</code> y de desacuerdo con
+      <code>rule_reference</code>. Sin esto, tocar un prompt es a ciegas.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill me">Esfuerzo medio</span><span class="pill n">Prioridad 1</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Versionar los prompts y registrarlo en la traza</h5>
+      <p>Los prompts viven en código —bien— pero no tienen versión propia ni quedan registrados: la traza guarda la
+      tarea, el proveedor, las herramientas ofrecidas y las claves de hechos, no el texto. Basta con un identificador
+      de versión (o un hash del texto compuesto) por cada capa —<code>SYSTEM_PROMPT</code>,
+      <code>AGENT_SYSTEM_PROMPT</code>, las <code>*_INSTRUCTIONS</code> del agente— emitido en
+      <code>llm_call_started</code>. Con eso, comparar dos ejecuciones deja de ser arqueología.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span><span class="pill n">Habilita todo lo demás</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Tratar las descripciones de herramientas como superficie de prompt</h5>
+      <p>La descripción de un <code>ToolSpec</code> determina si el modelo la llama o no, pero hoy se edita como si
+      fuera un comentario. Debería entrar en el mismo circuito que los prompts: versión, revisión y un caso en la suite
+      de evaluación que compruebe que la herramienta se invoca cuando corresponde (por ejemplo, que
+      <code>request_history</code> se llame si <code>bars_used &lt; min_bars_recommended</code>).</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Medir la sensibilidad del prompt entre modelos</h5>
+      <p>La tesis del proyecto es que los prompts son cortos porque la arquitectura sostiene la disciplina. Es una
+      afirmación comprobable: correr el mismo lote con dos o tres modelos y comparar tasa de guardarraíles,
+      de <code>validation_warning</code> y de <code>rules_fallback</code>. Si los números se mantienen, la tesis queda
+      demostrada; si se disparan con un modelo, se sabe exactamente dónde reforzar.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Validación semántica, no solo sintáctica</h5>
+      <p>Hoy se comprueba que los números existan, pero no que la evidencia <em>sostenga</em> la conclusión: una postura
+      ALCISTA citando un RSI de 78 pasa el filtro. Una regla de coherencia evidencia↔postura por agente cerraría el
+      hueco.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Caché de respuestas y de prompt</h5>
+      <p>El mismo símbolo el mismo día con el mismo modelo produce la misma entrada. Cachear por
+      (símbolo, fecha, modelo, versión de prompt) abarata las demos repetidas; el <em>prompt caching</em> del proveedor
+      reduce además el coste de la parte fija del contexto.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Streaming de tokens</h5>
+      <p>Hoy cada turno del modelo es opaco hasta que termina. Emitir deltas dejaría ver el razonamiento formándose,
+      lo que en una demo pedagógica vale mucho y reduce la latencia percibida.</p>
+      <div class="meta"><span class="pill lo">Impacto bajo</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <div class="imp">
+    <h4><span class="dot" style="background:var(--amber)"></span>Seguridad y coste</h4>
+    <p class="k">Lo que hay que resolver antes de exponerlo fuera de casa.</p>
+
+    <div class="item">
+      <h5>Presupuesto por ejecución</h5>
+      <p>No hay tope de gasto: un lote grande en modo <code>llm</code> puede costar bastante más de lo previsto. Un
+      máximo en USD por ejecución que, al alcanzarse, degrade a reglas y lo anote, convierte el coste en una decisión
+      explícita.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Superficie de inyección de prompt</h5>
+      <p>Los símbolos vienen del usuario y acaban en el prompt. Hoy el riesgo es bajo porque
+      <code>normalize_symbols()</code> los limpia y la salida está encorsetada por esquema y validación —pero en cuanto
+      entre texto libre (noticias, comentarios), hará falta separar datos de instrucciones explícitamente y tratar todo
+      lo externo como no confiable.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span><span class="pill n">Crítico si se añade RAG</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Autenticación y límite de peticiones</h5>
+      <p><code>POST /api/runs</code> gasta dinero real y no parece tener autenticación ni <em>rate limiting</em>. Ambos
+      son imprescindibles antes de exponer la app en internet.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Retención y contenido de los ficheros de ejecución</h5>
+      <p>Los JSON de <code>backend/runs/</code> guardan texto generado por el modelo y crecen sin límite. Conviene
+      política de retención, y revisar que no se persistan cabeceras, claves ni datos sensibles en los eventos de
+      llamada.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Trazas en un estándar abierto</h5>
+      <p>El <code>EventBus</code> ya es un trazador; exportarlo a OpenTelemetry (un <em>span</em> por agente, por llamada
+      al modelo y por herramienta) permitiría usar herramientas de observabilidad de LLM existentes sin construir nada
+      propio.</p>
+      <div class="meta"><span class="pill lo">Impacto bajo</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+  </div>
+
+  <div class="imp">
+    <h4><span class="dot" style="background:var(--accent)"></span>Producto, pruebas y experiencia</h4>
+    <p class="k">Detalles que multiplican el valor didáctico con poco código.</p>
+
+    <div class="item">
+      <h5>Comparar dos ejecuciones lado a lado</h5>
+      <p>La misma cartera en modo <code>rules</code> y en modo <code>llm</code>, en dos columnas, con las diferencias
+      resaltadas. Es la mejor forma de enseñar qué aporta y qué arriesga el modelo, y todo el dato necesario ya está
+      guardado.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill me">Esfuerzo medio</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Modo paso a paso</h5>
+      <p>Hoy el ritmo se controla con <code>message_delay_ms</code>. Un control de pausa / siguiente mensaje convertiría
+      la demo en algo narrable a velocidad de quien explica, sin adivinar el retardo correcto de antemano.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Exportar la traza</h5>
+      <p>Un botón para bajar la conversación como Markdown o PDF —incluyendo evidencias, objeciones y guardarraíles—
+      hace que la ejecución sirva como material de estudio o como anexo de una revisión técnica.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Tests de invariantes del protocolo</h5>
+      <p>Tres pruebas baratas que protegen el diseño: toda respuesta lleva <code>in_reply_to</code> válido; ningún
+      mensaje llega a un agente sin haber pasado por <code>deliver()</code>; los <code>seq</code> son estrictamente
+      monótonos y sin huecos. Más pruebas de propiedades sobre los indicadores.</p>
+      <div class="meta"><span class="pill hi">Impacto alto</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+
+    <div class="item">
+      <h5>Aviso explícito de que no es asesoramiento financiero</h5>
+      <p>La app emite palabras como COMPRA y VENTA. Un descargo visible en la interfaz y en la traza exportada evita
+      malentendidos y es lo correcto aunque el dominio sea una excusa.</p>
+      <div class="meta"><span class="pill me">Impacto medio</span><span class="pill lo">Esfuerzo bajo</span></div>
+    </div>
+  </div>
+
+  <div class="note blue"><b>Si hubiera que elegir tres:</b> la suite de evaluación con trazas de referencia (sin ella no
+  se puede mejorar nada con criterio), la persistencia real (sin ella no se puede desplegar) y el bucle de
+  realimentación con el precio posterior (sin él no se puede decir si el sistema acierta).</div>
+</section>
+
+<footer>
+  Documento derivado de <code>COMO_FUNCIONA.md</code> · Referencia de conceptos de IA y LLM, preguntas frecuentes y
+  oportunidades de mejora.<br>
+  El dominio financiero es un ejemplo didáctico: nada de esto constituye asesoramiento de inversión.
+</footer>
+
+</div>
+
+<script>
+(function(){
+  var filters = document.getElementById('filters');
+  var items = Array.prototype.slice.call(document.querySelectorAll('#qalist details.qa'));
+  filters.addEventListener('click', function(e){
+    var btn = e.target.closest('button');
+    if(!btn) return;
+    var f = btn.dataset.f;
+    Array.prototype.forEach.call(filters.querySelectorAll('button'), function(b){
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+    items.forEach(function(d){
+      var show = (f === 'all') || (d.dataset.c === f);
+      d.classList.toggle('hidden', !show);
+      if(!show) d.open = false;
+    });
+  });
+})();
+</script>
+</body>
+</html>
