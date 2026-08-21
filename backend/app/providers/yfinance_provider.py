@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+from datetime import date, timedelta
 
 from .market_data_provider import (
     Bar,
@@ -25,7 +26,7 @@ class YFinanceProvider(MarketDataProvider):
 
     async def fetch(self, symbol: str, days: int) -> MarketSeries:
         try:
-            return await asyncio.wait_for(asyncio.to_thread(self._fetch_sync, symbol, days), timeout=30)
+            return await asyncio.wait_for(asyncio.to_thread(self._fetch_sync, symbol, days), timeout=60)
         except asyncio.TimeoutError as e:
             raise MarketDataError(f"Timeout al descargar datos de {symbol}.") from e
 
@@ -35,9 +36,13 @@ class YFinanceProvider(MarketDataProvider):
         except ImportError as e:  # pragma: no cover
             raise MarketDataError("yfinance no está instalado.") from e
 
+        # `days` son días naturales (como en el proveedor mock): se piden por rango de fechas,
+        # no con `period="Nd"`, que en yfinance significa N sesiones de mercado.
+        start = date.today() - timedelta(days=max(days, 7))
+        end = date.today() + timedelta(days=1)
         try:
             ticker = yf.Ticker(symbol)
-            df = ticker.history(period=f"{max(days, 5)}d", interval="1d", auto_adjust=True)
+            df = ticker.history(start=start.isoformat(), end=end.isoformat(), interval="1d", auto_adjust=True)
         except Exception as e:  # errores de red / parsing de yfinance
             raise MarketDataError(f"Fallo al consultar {symbol}: {e.__class__.__name__}") from e
 
@@ -52,10 +57,10 @@ class YFinanceProvider(MarketDataProvider):
             bars.append(
                 Bar(
                     date=idx.strftime("%Y-%m-%d"),
-                    open=float(row.get("Open", close)),
-                    high=float(row.get("High", close)),
-                    low=float(row.get("Low", close)),
-                    close=close,
+                    open=round(float(row.get("Open", close)), 4),
+                    high=round(float(row.get("High", close)), 4),
+                    low=round(float(row.get("Low", close)), 4),
+                    close=round(close, 4),
                     volume=float(row.get("Volume", 0) or 0),
                 )
             )

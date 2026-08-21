@@ -27,11 +27,13 @@ from .llm_provider import (
     ToolCall,
     ToolSpec,
     extract_json_object,
+    with_cost,
 )
 
 log = logging.getLogger(__name__)
 
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODELS_URL = "https://openrouter.ai/api/v1/models"
 
 
 class OpenRouterProvider(LLMProvider):
@@ -55,6 +57,42 @@ class OpenRouterProvider(LLMProvider):
             },
         )
         self.name = f"openrouter:{self._model}"
+        # Precios (USD/token) del catálogo de OpenRouter; se cargan una sola vez y solo si hacen falta.
+        self._pricing: tuple[float, float] | None = None
+        self._pricing_loaded = False
+
+    async def _load_pricing(self) -> tuple[float, float] | None:
+        if self._pricing_loaded:
+            return self._pricing
+        self._pricing_loaded = True
+        try:
+            resp = await self._client.get(OPENROUTER_MODELS_URL, timeout=15.0)
+            if resp.status_code == 200:
+                for m in resp.json().get("data", []):
+                    if m.get("id") == self._model:
+                        pr = m.get("pricing") or {}
+                        self._pricing = (float(pr.get("prompt", 0)) * 1e6, float(pr.get("completion", 0)) * 1e6)
+                        break
+        except Exception as e:  # sin catálogo no hay estimación; no es un error de la demo
+            log.info("OpenRouter: no se pudo leer el catálogo de precios (%s).", e)
+        return self._pricing
+
+    async def _usage(self, data: dict[str, Any], mode: str) -> dict[str, Any]:
+        usage = data.get("usage") or {}
+        base = {
+            "input_tokens": usage.get("prompt_tokens"),
+            "output_tokens": usage.get("completion_tokens"),
+            "model": data.get("model", self._model),
+            "provider": data.get("provider"),
+            "mode": mode,
+        }
+        cost = usage.get("cost")
+        if isinstance(cost, (int, float)):
+            return with_cost(base, provider_cost_usd=float(cost))
+        pricing = await self._load_pricing()
+        if pricing:
+            return with_cost(base, price_input_per_mtok=pricing[0], price_output_per_mtok=pricing[1])
+        return with_cost(base)
 
     # ------------------------------------------------------------ modo reglas
     @staticmethod
@@ -80,7 +118,7 @@ class OpenRouterProvider(LLMProvider):
         parsed = extract_json_object(content)
         if parsed is None:
             raise LLMError("OpenRouter: la respuesta del modelo no es JSON válido.")
-        parsed["_usage"] = _usage(data, self._model, mode)
+        parsed["_usage"] = await self._usage(data, mode)
         return parsed
 
     # --------------------------------------------------------------- modo llm
@@ -118,12 +156,13 @@ class OpenRouterProvider(LLMProvider):
             calls.append(ToolCall(id=str(raw.get("id") or f"call_{len(calls)}"), name=str(fn.get("name")), arguments=args))
 
         assistant = ChatMessage(role="assistant", content=content or None, tool_calls=calls)
+        usage = await self._usage(data, mode)
         if calls:
-            return LLMTurn(assistant=assistant, tool_calls=calls, output=None, usage=_usage(data, self._model, mode))
+            return LLMTurn(assistant=assistant, tool_calls=calls, output=None, usage=usage)
         output = extract_json_object(content)
         if output is None:
             raise LLMError("OpenRouter: el modelo terminó sin devolver el JSON final.")
-        return LLMTurn(assistant=assistant, tool_calls=[], output=output, usage=_usage(data, self._model, mode))
+        return LLMTurn(assistant=assistant, tool_calls=[], output=output, usage=usage)
 
     # ------------------------------------------------------------------ http
     async def _request_with_ladder(
@@ -137,6 +176,8 @@ class OpenRouterProvider(LLMProvider):
                 "max_tokens": self._max_tokens,
                 "temperature": self._temperature,
                 "messages": messages,
+                # Pide a OpenRouter que incluya el coste exacto (USD) en `usage`.
+                "usage": {"include": True},
             }
             if tools:
                 body["tools"] = tools
@@ -230,17 +271,6 @@ def _content_text(choice: dict[str, Any]) -> str:
     if isinstance(content, list):  # algunos proveedores devuelven partes
         content = "".join(part.get("text", "") for part in content if isinstance(part, dict))
     return content if isinstance(content, str) else ""
-
-
-def _usage(data: dict[str, Any], model: str, mode: str) -> dict[str, Any]:
-    usage = data.get("usage") or {}
-    return {
-        "input_tokens": usage.get("prompt_tokens"),
-        "output_tokens": usage.get("completion_tokens"),
-        "model": data.get("model", model),
-        "provider": data.get("provider"),
-        "mode": mode,
-    }
 
 
 def _error_detail(resp: httpx.Response) -> str:

@@ -100,6 +100,22 @@ export interface SymbolResult {
   disagreements: number;
 }
 
+export interface AgentCost {
+  calls: number;
+  input_tokens: number;
+  output_tokens: number;
+  cost_usd: number | null;
+  cost_known_calls: number;
+  sources: Record<string, number>;
+  models: Record<string, number>;
+}
+
+export interface CostSummary {
+  currency: string;
+  per_agent: Record<string, AgentCost>;
+  total: AgentCost;
+}
+
 export type RunStatus = "pending" | "running" | "completed" | "failed";
 
 export interface RunSummary {
@@ -112,6 +128,7 @@ export interface RunSummary {
   providers: Record<string, string>;
   message_delay_ms?: number;
   agent_mode?: AgentMode;
+  costs?: CostSummary | null;
   disclaimer: string;
 }
 

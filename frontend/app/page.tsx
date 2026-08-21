@@ -3,11 +3,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import AgentGraph from "@/components/AgentGraph";
 import AnalysisForm from "@/components/AnalysisForm";
+import CostPanel from "@/components/CostPanel";
 import DecisionTable from "@/components/DecisionTable";
 import EventLog from "@/components/EventLog";
 import MessageInspector from "@/components/MessageInspector";
 import { api, ApiError } from "@/lib/api";
-import { isRunFinished, resultsFromEvents, runSettingsFromEvents, symbolsFromEvents } from "@/lib/trace";
+import { costsFromEvents, isRunFinished, resultsFromEvents, runSettingsFromEvents, symbolsFromEvents } from "@/lib/trace";
 import { AGENT_MODE_LABELS, DECISION_DOT, type AgentMode, type AgentName, type AppConfig, type RunEvent, type RunSummary } from "@/lib/types";
 import { connectRunSocket, mergeEvents, type RunSocket, type SocketStatus } from "@/lib/websocket";
 
@@ -116,6 +117,7 @@ export default function Page() {
   const results = useMemo(() => resultsFromEvents(events), [events]);
   const finished = useMemo(() => isRunFinished(events), [events]);
   const { messageDelayMs, agentMode } = useMemo(() => runSettingsFromEvents(events), [events]);
+  const costs = useMemo(() => costsFromEvents(events), [events]);
   const running = Boolean(runId) && !finished;
 
   // Cerrar el socket al terminar (la traza ya está completa en memoria) y refrescar el historial.
@@ -219,6 +221,7 @@ export default function Page() {
             rejected={rejected}
             error={formError}
           />
+          {runId && <CostPanel costs={costs} running={running} providerName={config?.llm_provider} />}
           <div className="panel p-4">
             <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">Qué observar</div>
             <ol className="space-y-1.5">

@@ -33,6 +33,7 @@ from .websocket_manager import WebSocketManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 logging.getLogger("httpx").setLevel(logging.WARNING)  # una línea por petición LLM es demasiado ruido
+logging.getLogger("yfinance").setLevel(logging.CRITICAL)  # los símbolos inexistentes ya se reportan en la traza
 log = logging.getLogger("app")
 
 store = RunStore(persist_dir=settings.runs_dir or None)

@@ -23,9 +23,22 @@ from .llm_provider import (
     ToolCall,
     ToolSpec,
     extract_json_object,
+    with_cost,
 )
 
 log = logging.getLogger(__name__)
+
+# USD por millón de tokens (entrada, salida). Fuente: tarifas públicas de la Claude API.
+ANTHROPIC_PRICES: dict[str, tuple[float, float]] = {
+    "claude-fable-5": (10.0, 50.0),
+    "claude-opus-5": (5.0, 25.0),
+    "claude-opus-4-8": (5.0, 25.0),
+    "claude-opus-4-7": (5.0, 25.0),
+    "claude-opus-4-6": (5.0, 25.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-sonnet-4-6": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+}
 
 
 class AnthropicProvider(LLMProvider):
@@ -83,11 +96,16 @@ class AnthropicProvider(LLMProvider):
         usage = getattr(response, "usage", None)
         if usage is None:
             return None
-        return {
+        served_model = str(getattr(response, "model", model) or model)
+        base = {
             "input_tokens": getattr(usage, "input_tokens", None),
             "output_tokens": getattr(usage, "output_tokens", None),
-            "model": getattr(response, "model", model),
+            "model": served_model,
         }
+        prices = next((v for k, v in ANTHROPIC_PRICES.items() if served_model.startswith(k)), None)
+        if prices:
+            return with_cost(base, price_input_per_mtok=prices[0], price_output_per_mtok=prices[1])
+        return with_cost(base)
 
     # ------------------------------------------------------------ modo reglas
     async def complete_json(self, request: LLMRequest) -> dict[str, Any]:

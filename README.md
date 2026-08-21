@@ -44,6 +44,20 @@ indica "reglas: X" cuando el agente opinó distinto de lo que habrían dicho las
 evidencia citada. Las ejecuciones se guardan en `backend/runs/` (JSON) y se pueden reabrir desde el desplegable
 "ejecuciones anteriores" o con `?run=<id>`.
 
+### Consumo LLM (tokens y USD) por agente
+
+El panel **Consumo LLM** de la barra lateral se actualiza en vivo con cada `llm_call_completed`: llamadas, tokens de
+entrada/salida y coste en USD por agente, con una barra proporcional al consumo y el total de la ejecución. El coste se
+obtiene así, en orden de prioridad:
+
+1. **Informado por el proveedor** — OpenRouter devuelve el coste exacto de cada petición (`usage.cost`, se pide con `usage: {include: true}`).
+2. **Estimado** — si el proveedor no lo informa, se estima con precios por millón de tokens: catálogo público de OpenRouter
+   para el modelo en uso, tabla interna para la Claude API directa, o `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` si los defines.
+3. **Mock** — coste 0 con tokens aproximados (≈4 caracteres/token) para que el panel se vea sin red.
+
+Las llamadas sin precio conocido no se suman (el panel marca el total con `*`). El resumen queda en `RunSummary.costs`,
+en el evento `run_completed` y en `GET /api/runs/{id}/costs`.
+
 ### Garantías de seguridad / honestidad
 
 - **Sin broker, sin órdenes.** El único acceso externo es lectura de precios (yfinance) o un mock.
@@ -230,9 +244,10 @@ Notas:
 | `LLM_PROVIDER` | `mock` (defecto) · `openrouter` · `anthropic` | `openrouter` requiere `OPENROUTER_API_KEY` y acepta cualquier modelo del catálogo (`OPENROUTER_MODEL`, por defecto `anthropic/claude-sonnet-4.6`). `anthropic` usa la Claude API directa (`ANTHROPIC_API_KEY` o perfil de `ant auth login`, modelo `claude-opus-5`, `ANTHROPIC_EFFORT=low`). En ambos casos el LLM **solo redacta** las explicaciones. |
 | `LLM_MAX_CONCURRENCY` | entero | Llamadas LLM simultáneas como máximo (defecto 4); protege límites de tasa. |
 | `AGENT_MODE` | `llm` (defecto) · `rules` | Modo de los agentes por defecto (ver tabla de modos). |
+| `LLM_PRICE_INPUT_PER_MTOK` / `LLM_PRICE_OUTPUT_PER_MTOK` | USD | Precios manuales para estimar el coste cuando el proveedor no lo informa (opcional). |
 | `AGENT_MAX_STEPS` | entero | Turnos máximos del modelo por agente y tarea en modo `llm` (defecto 8). |
 | `RUNS_DIR` | ruta | Carpeta de persistencia de ejecuciones (defecto `backend/runs`; vacío = solo memoria). |
-| `MARKET_DATA_PROVIDER` | `mock` (defecto) · `yfinance` | `yfinance` descarga precios diarios reales (solo lectura). |
+| `MARKET_DATA_PROVIDER` | `mock` (defecto) · `yfinance` | `yfinance` descarga precios diarios reales de Yahoo Finance (solo lectura; `days` son días naturales: 130 → ~90 sesiones, 365 → ~252). Probado con `AAPL`, `NVDA`, `SAN.MC` (EUR) y un símbolo inexistente → `NO_ANALIZABLE`. La primera descarga puede tardar 20-30 s (arranque en frío de yfinance); las siguientes, 1-2 s. Sin SLA ni garantía de disponibilidad. |
 | `DEMO_DELAY_MS` | ms | Latencia simulada de los proveedores mock (LLM y datos). |
 | `MESSAGE_DELAY_MS` | ms (0-5000) | Retardo aplicado a **cada mensaje entre agentes** (ida y vuelta) para seguir el flujo en el grafo. Valor por defecto; el formulario permite elegir el ritmo por ejecución (Rápido 0 · Normal 800 · Lento 1500 · Muy lento 3000) y la animación del grafo se ajusta a él. |
 | `MAX_PARALLEL_SYMBOLS` | entero | Símbolos analizados simultáneamente. |
@@ -296,6 +311,7 @@ Símbolos conocidos por el mock: AAPL, AMD, AMZN, GOOGL, IBE.MC, INTC, JPM, KO, 
 | `GET` | `/api/runs` | Lista de ejecuciones |
 | `GET` | `/api/runs/{run_id}` | Resumen y resultados |
 | `GET` | `/api/runs/{run_id}/events?after=0` | Eventos (auditoría / replay) |
+| `GET` | `/api/runs/{run_id}/costs` | Consumo LLM por agente (tokens y USD) |
 | `WS` | `/ws/runs/{run_id}` | Reenvía el historial y luego los eventos nuevos |
 | `GET` | `/api/health` · `/api/config` · `/api/agents` | Estado, proveedores activos y catálogo de agentes |
 

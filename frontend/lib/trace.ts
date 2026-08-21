@@ -2,7 +2,9 @@
 import {
   AGENT_LABELS,
   MESSAGE_TYPE_LABELS,
+  type AgentCost,
   type AgentName,
+  type CostSummary,
   type RunEvent,
   type SymbolResult,
 } from "./types";
@@ -49,6 +51,39 @@ export function resultsFromEvents(events: RunEvent[]): Record<string, SymbolResu
     }
   }
   return out;
+}
+
+function emptyCost(): AgentCost {
+  return { calls: 0, input_tokens: 0, output_tokens: 0, cost_usd: null, cost_known_calls: 0, sources: {}, models: {} };
+}
+
+function addUsage(acc: AgentCost, usage: Record<string, unknown>): void {
+  acc.calls += 1;
+  if (typeof usage.input_tokens === "number") acc.input_tokens += usage.input_tokens;
+  if (typeof usage.output_tokens === "number") acc.output_tokens += usage.output_tokens;
+  if (typeof usage.cost_usd === "number") {
+    acc.cost_usd = (acc.cost_usd ?? 0) + usage.cost_usd;
+    acc.cost_known_calls += 1;
+  }
+  const source = typeof usage.cost_source === "string" ? usage.cost_source : "unknown";
+  acc.sources[source] = (acc.sources[source] ?? 0) + 1;
+  const model = typeof usage.model === "string" ? usage.model : "?";
+  acc.models[model] = (acc.models[model] ?? 0) + 1;
+}
+
+/** Consumo LLM (tokens y USD) por agente, calculado en vivo a partir de la traza. */
+export function costsFromEvents(events: RunEvent[]): CostSummary {
+  const summary: CostSummary = { currency: "USD", per_agent: {}, total: emptyCost() };
+  for (const e of events) {
+    if (e.type !== "llm_call_completed" || !e.data.ok) continue;
+    const usage = e.data.usage;
+    if (!usage || typeof usage !== "object") continue;
+    const agent = e.agent ?? "unknown";
+    summary.per_agent[agent] = summary.per_agent[agent] ?? emptyCost();
+    addUsage(summary.per_agent[agent], usage as Record<string, unknown>);
+    addUsage(summary.total, usage as Record<string, unknown>);
+  }
+  return summary;
 }
 
 export function isRunFinished(events: RunEvent[]): boolean {

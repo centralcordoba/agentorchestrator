@@ -14,7 +14,7 @@ import re
 from typing import Any
 
 from ..config import settings
-from .llm_provider import ChatMessage, LLMProvider, LLMRequest, LLMTurn, ToolCall, ToolSpec
+from .llm_provider import ChatMessage, LLMProvider, LLMRequest, LLMTurn, ToolCall, ToolSpec, with_cost
 
 _FACTS_RE = re.compile(r"<facts>\n(.*?)\n</facts>", re.S)
 
@@ -42,7 +42,9 @@ class MockLLMProvider(LLMProvider):
             "skeptic_review": self._skeptic,
             "decision_rationale": self._decision,
         }.get(request.task, self._generic)
-        return handler(request.facts)
+        out = handler(request.facts)
+        out["_usage"] = _mock_usage(json.dumps(request.facts, default=str) + request.instructions, json.dumps(out))
+        return out
 
     def _technical(self, f: dict[str, Any]) -> dict[str, Any]:
         stance = f.get("stance")
@@ -110,7 +112,10 @@ class MockLLMProvider(LLMProvider):
         }.get(task)
         if handler is None:
             return _final({"summary": "Sin guion para esta tarea.", "caveats": []})
-        return handler(facts, results, tool_names)
+        turn = handler(facts, results, tool_names)
+        prompt_chars = sum(len(m.content or "") for m in messages)
+        turn.usage = _mock_usage("x" * prompt_chars, turn.assistant.content or "")
+        return turn
 
     # --- técnico
     def _agent_technical(self, facts, results, tool_names) -> LLMTurn:
@@ -231,6 +236,14 @@ def _tool_results(messages: list[ChatMessage]) -> dict[str, list[dict[str, Any]]
             except ValueError:
                 out.setdefault(m.tool_name, []).append({"error": "resultado no JSON"})
     return out
+
+
+def _mock_usage(prompt_text: str, completion_text: str) -> dict[str, Any]:
+    """Tokens aproximados (~4 caracteres por token) con coste 0: permite ver el panel de consumo sin red."""
+    return with_cost(
+        {"input_tokens": max(1, len(prompt_text) // 4), "output_tokens": max(1, len(completion_text) // 4), "model": "mock", "mode": "mock"},
+        mock=True,
+    )
 
 
 _counter = 0
