@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  height: 100%;
+  background: #0b0f17;
+  color: #e5e7eb;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2f3b54 transparent;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}
+
+.node-working {
+  animation: node-glow 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes node-glow {
+  from {
+    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.2));
+  }
+  to {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+  }
+}
+
+.panel {
+  @apply rounded-xl border border-ink-700 bg-ink-900/80;
+}
+
+.panel-title {
+  @apply flex items-center justify-between border-b border-ink-700 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400;
+}
+
+.chip {
+  @apply inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-4;
+}

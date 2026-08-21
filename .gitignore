@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+backend/.env
+# Ruedas para instalación sin internet (se copian a mano, no por git)
+backend/wheels/
+
+# NOTA: frontend/out/ (build estático) NO se ignora a propósito: se construye en una
+# máquina con Node y se transporta junto al repo a la máquina de destino.
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+frontend/.env
+frontend/.env.local
+*.tsbuildinfo
+next-env.d.ts
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

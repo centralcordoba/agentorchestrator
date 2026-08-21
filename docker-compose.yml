@@ -1,0 +1,32 @@
+services:
+  backend:
+    build: ./backend
+    container_name: agentdemo-backend
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      # Por defecto todo en modo mock (sin red ni claves). Sobrescribe en backend/.env.
+      LLM_PROVIDER: ${LLM_PROVIDER:-mock}
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-mock}
+      CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # URL que usa el NAVEGADOR para hablar con el backend (no el nombre del servicio).
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    container_name: agentdemo-frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
