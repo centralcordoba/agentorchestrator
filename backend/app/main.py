@@ -21,9 +21,9 @@ from fastapi.staticfiles import StaticFiles
 
 from .config import settings
 from .events import EventBus
-from .models import DISCLAIMER, RunCreated, RunRequest, RunStatus, RunSummary, new_id, now
+from .models import DISCLAIMER, AgentMode, RunCreated, RunRequest, RunStatus, RunSummary, new_id, now
 from .orchestrator import Orchestrator
-from .providers.llm_provider import LLMProvider
+from .providers.llm_provider import LLMProvider, ThrottledLLMProvider
 from .providers.market_data_provider import MarketDataProvider
 from .providers.mock_llm_provider import MockLLMProvider
 from .providers.mock_market_data_provider import MockMarketDataProvider
@@ -32,9 +32,10 @@ from .services.validation import normalize_symbols
 from .websocket_manager import WebSocketManager
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+logging.getLogger("httpx").setLevel(logging.WARNING)  # una línea por petición LLM es demasiado ruido
 log = logging.getLogger("app")
 
-store = RunStore()
+store = RunStore(persist_dir=settings.runs_dir or None)
 ws_manager = WebSocketManager()
 bus = EventBus(store, ws_manager)
 _background: set[asyncio.Task] = set()
@@ -44,7 +45,13 @@ def build_llm_provider() -> LLMProvider:
     if settings.llm_provider == "anthropic":
         from .providers.anthropic_provider import AnthropicProvider
 
-        return AnthropicProvider()
+        return ThrottledLLMProvider(AnthropicProvider(), settings.llm_max_concurrency)
+    if settings.llm_provider == "openrouter":
+        from .providers.openrouter_provider import OpenRouterProvider
+
+        return ThrottledLLMProvider(OpenRouterProvider(), settings.llm_max_concurrency)
+    if settings.llm_provider != "mock":
+        log.warning("LLM_PROVIDER=%r desconocido; se usa 'mock'.", settings.llm_provider)
     return MockLLMProvider()
 
 
@@ -99,6 +106,10 @@ async def config() -> dict:
         "max_symbols_per_run": settings.max_symbols_per_run,
         "max_parallel_symbols": settings.max_parallel_symbols,
         "demo_delay_ms": settings.demo_delay_ms,
+        "message_delay_ms": settings.message_delay_ms,
+        "max_message_delay_ms": settings.max_message_delay_ms,
+        "agent_mode": settings.agent_mode if settings.agent_mode in ("rules", "llm") else "rules",
+        "llm_supports_tools": llm_provider.supports_tools,
         "disclaimer": DISCLAIMER,
     }
 
@@ -127,6 +138,17 @@ async def create_run(req: RunRequest) -> RunCreated:
         raise HTTPException(status_code=422, detail={"message": "Ningún símbolo válido.", "rejected": rejected})
 
     run_id = new_id("run")
+    orchestrator = Orchestrator(
+        run_id=run_id,
+        symbols=symbols,
+        bus=bus,
+        store=store,
+        llm=llm_provider,
+        market=market_provider,
+        settings=settings,
+        message_delay_ms=req.message_delay_ms,
+        agent_mode=req.agent_mode.value if req.agent_mode else None,
+    )
     store.create(
         RunSummary(
             run_id=run_id,
@@ -134,10 +156,9 @@ async def create_run(req: RunRequest) -> RunCreated:
             symbols=symbols,
             created_at=now(),
             providers={"llm": llm_provider.name, "market_data": market_provider.name},
+            message_delay_ms=orchestrator.message_delay_ms,
+            agent_mode=AgentMode(orchestrator.agent_mode),
         )
-    )
-    orchestrator = Orchestrator(
-        run_id=run_id, symbols=symbols, bus=bus, store=store, llm=llm_provider, market=market_provider, settings=settings
     )
 
     async def _run() -> None:
@@ -150,7 +171,7 @@ async def create_run(req: RunRequest) -> RunCreated:
     task = asyncio.create_task(_run())
     _background.add(task)
     task.add_done_callback(_background.discard)
-    return RunCreated(run_id=run_id, symbols=symbols, rejected=rejected)
+    return RunCreated(run_id=run_id, symbols=symbols, rejected=rejected, message_delay_ms=orchestrator.message_delay_ms, agent_mode=AgentMode(orchestrator.agent_mode))
 
 
 @app.get("/api/runs", response_model=list[RunSummary])
@@ -164,6 +185,16 @@ async def get_run(run_id: str) -> RunSummary:
     if run is None:
         raise HTTPException(status_code=404, detail="Ejecución no encontrada.")
     return run
+
+
+@app.get("/api/runs/{run_id}/costs")
+async def get_costs(run_id: str) -> dict:
+    """Consumo LLM por agente (tokens y USD). Se calcula en vivo a partir de la traza."""
+    if store.get(run_id) is None:
+        raise HTTPException(status_code=404, detail="Ejecución no encontrada.")
+    from .services.costs import summarize_costs
+
+    return summarize_costs(store.events(run_id)).model_dump(mode="json")
 
 
 @app.get("/api/runs/{run_id}/events")

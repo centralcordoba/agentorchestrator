@@ -25,7 +25,11 @@ export type EventType =
   | "llm_call_completed"
   | "validation_warning"
   | "disagreement"
-  | "decision_made";
+  | "decision_made"
+  | "tool_called"
+  | "guardrail_applied";
+
+export type AgentMode = "rules" | "llm";
 
 export type Decision = "COMPRA" | "VENTA" | "ESPERAR" | "NO_ANALIZABLE";
 export type Stance = "ALCISTA" | "BAJISTA" | "NEUTRAL";
@@ -64,6 +68,11 @@ export interface LLMExplanation {
   validation_warnings: string[];
 }
 
+export interface Evidence {
+  fact: string;
+  observation: string;
+}
+
 export interface AgentOpinion {
   agent: AgentName;
   stance: Stance | null;
@@ -72,6 +81,9 @@ export interface AgentOpinion {
   confidence: number;
   facts: Record<string, unknown>;
   explanation: LLMExplanation;
+  mode?: "rules" | "llm" | "rules_fallback";
+  evidence?: Evidence[];
+  rule_reference?: Record<string, unknown>;
 }
 
 export interface SymbolResult {
@@ -98,6 +110,8 @@ export interface RunSummary {
   finished_at: string | null;
   results: Record<string, SymbolResult>;
   providers: Record<string, string>;
+  message_delay_ms?: number;
+  agent_mode?: AgentMode;
   disclaimer: string;
 }
 
@@ -105,6 +119,8 @@ export interface RunCreated {
   run_id: string;
   symbols: string[];
   rejected: Record<string, string>;
+  message_delay_ms: number;
+  agent_mode: AgentMode;
 }
 
 export interface AppConfig {
@@ -113,8 +129,25 @@ export interface AppConfig {
   max_symbols_per_run: number;
   max_parallel_symbols: number;
   demo_delay_ms: number;
+  message_delay_ms: number;
+  max_message_delay_ms: number;
+  agent_mode: AgentMode;
+  llm_supports_tools: boolean;
   disclaimer: string;
 }
+
+export const AGENT_MODE_LABELS: Record<AgentMode, { label: string; hint: string }> = {
+  rules: { label: "Reglas", hint: "Las reglas deciden; el LLM solo redacta las explicaciones" },
+  llm: { label: "LLM", hint: "El modelo razona con herramientas; las reglas vigilan (guardarraíles)" },
+};
+
+/** Ritmos predefinidos: retardo (ms) aplicado a cada mensaje entre agentes. */
+export const PACE_OPTIONS: { label: string; ms: number; hint: string }[] = [
+  { label: "Rápido", ms: 0, hint: "Sin retardo entre mensajes" },
+  { label: "Normal", ms: 800, hint: "0,8 s por mensaje" },
+  { label: "Lento", ms: 1500, hint: "1,5 s por mensaje: cómodo para explicar en clase" },
+  { label: "Muy lento", ms: 3000, hint: "3 s por mensaje: paso a paso" },
+];
 
 export const AGENT_LABELS: Record<AgentName, string> = {
   orchestrator: "Orquestador",
@@ -125,13 +158,23 @@ export const AGENT_LABELS: Record<AgentName, string> = {
   decision: "Decisión",
 };
 
+// Colores de agente: oscuros y desaturados, legibles sobre fondo claro.
 export const AGENT_COLORS: Record<AgentName, string> = {
-  orchestrator: "#a78bfa",
-  market_data: "#38bdf8",
-  technical: "#34d399",
-  risk: "#fbbf24",
-  skeptic: "#f472b6",
-  decision: "#f97316",
+  orchestrator: "#5B4B8A",
+  market_data: "#2F6F8F",
+  technical: "#2E7D5B",
+  risk: "#9A6700",
+  skeptic: "#A8445C",
+  decision: "#C2562E",
+};
+
+export const AGENT_SOFT_COLORS: Record<AgentName, string> = {
+  orchestrator: "#EDEAF5",
+  market_data: "#E6F0F5",
+  technical: "#E7F2EC",
+  risk: "#FBF1DC",
+  skeptic: "#F7E8EC",
+  decision: "#F7EAE3",
 };
 
 export const MESSAGE_TYPE_LABELS: Record<MessageType, string> = {
@@ -146,8 +189,15 @@ export const MESSAGE_TYPE_LABELS: Record<MessageType, string> = {
 };
 
 export const DECISION_STYLES: Record<Decision, string> = {
-  COMPRA: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-  VENTA: "bg-rose-500/15 text-rose-300 border-rose-500/40",
-  ESPERAR: "bg-amber-500/15 text-amber-300 border-amber-500/40",
-  NO_ANALIZABLE: "bg-slate-500/15 text-slate-300 border-slate-500/40",
+  COMPRA: "bg-ok-soft text-ok border-ok/30",
+  VENTA: "bg-danger-soft text-danger border-danger/30",
+  ESPERAR: "bg-warn-soft text-warn border-warn/30",
+  NO_ANALIZABLE: "bg-sunken text-ink-500 border-line-strong",
+};
+
+export const DECISION_DOT: Record<Decision, string> = {
+  COMPRA: "#2E7D5B",
+  VENTA: "#B3362B",
+  ESPERAR: "#9A6700",
+  NO_ANALIZABLE: "#8C887F",
 };

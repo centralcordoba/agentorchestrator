@@ -23,8 +23,26 @@ El dominio (análisis técnico) es solo una excusa pedagógica: lo importante es
 | 5 | Un agente discrepa de otro | `SkepticAgent` detecta contradicciones y envía un `challenge` directo a `TechnicalAgent`, que *mantiene* o *concede* | Evento `disagreement`, arista discontinua escéptico→técnico, columna "Escéptico" en la tabla |
 | 6 | Solicitud de información adicional | `RiskAgent` necesita ≥200 sesiones; envía `info_request` a *Datos de mercado* y recibe `info_response` | Arista discontinua riesgo→datos; mensajes ámbar |
 | 7 | Gestión de error / dato faltante | Proveedor lanza `SymbolNotFoundError` / `InsufficientDataError` / `MarketDataError` → mensaje `error` → `NO_ANALIZABLE` | Evento `agent_error` en rojo; fila gris en la tabla con el motivo |
-| 8 | Decisión final a partir de varias opiniones | `DecisionAgent.decide()` aplica reglas R0–R5 explícitas | Columna "Justificación" + mensaje `decision` con la regla aplicada |
+| 8 | Decisión final a partir de varias opiniones | `DecisionAgent`: reglas R0–R5 (modo `rules`) o el modelo con guardarraíles G1–G4 (modo `llm`) | Columna "Justificación" + mensaje `decision` con la regla o los guardarraíles aplicados |
 | 9 | Visualización en tiempo real | `EventBus` → `WebSocketManager` (replay + streaming) | Grafo, log de eventos, inspector y tabla se actualizan en vivo |
+
+### Dos modos de agentes (`AGENT_MODE`, seleccionable por ejecución en la UI)
+
+| | `rules` | `llm` (por defecto) |
+|---|---|---|
+| Quién decide | Reglas deterministas (R0–R5) | El modelo, razonando con **herramientas** |
+| Papel del LLM | Solo redacta la explicación | Fija postura, riesgo, objeciones y decisión |
+| Números | Código determinista | Código determinista, expuesto al modelo como herramientas (`compute_indicators`, `compute_risk_metrics`, `request_history`, `challenge_technical`) |
+| Control | — | **Guardarraíles** visibles (`guardrail_applied`): T1 postura opuesta a las reglas sin evidencia, R1 riesgo subestimado, S1 discrepancia sin objeciones, G1 veto por riesgo ALTO, G2 decisión contraria al técnico, G3 discrepancia no resuelta acota la confianza, G4 NO_ANALIZABLE con datos |
+| Validación | Números del resumen anclados en hechos | Además: cada `evidence.fact` debe existir; enumerados; confianza en [0,1]; textos con números inventados se sustituyen |
+| Reproducible | Sí | Solo con el proveedor `mock` (sigue un guion); con un modelo real, guarda y reabre la ejecución |
+| Si el LLM falla | Explicación por reglas | El agente cae al modo reglas (`mode: rules_fallback`) y lo anota |
+
+En modo `llm`, la traza muestra cada turno del modelo (`llm_call_started/completed` con `step`), cada llamada a
+herramienta con argumentos y resultado (`tool_called`) y cada corrección (`guardrail_applied`). La tabla de decisiones
+indica "reglas: X" cuando el agente opinó distinto de lo que habrían dicho las reglas, y el inspector muestra la
+evidencia citada. Las ejecuciones se guardan en `backend/runs/` (JSON) y se pueden reabrir desde el desplegable
+"ejecuciones anteriores" o con `?run=<id>`.
 
 ### Garantías de seguridad / honestidad
 
@@ -36,7 +54,8 @@ El dominio (análisis técnico) es solo una excusa pedagógica: lo importante es
 - **Sin datos → `NO_ANALIZABLE`.** Nunca se rellena con estimaciones.
 - **Sin chain-of-thought.** Las salidas del LLM son JSON estructurado (`summary`, `facts_used`, `caveats`)
   obtenido con salida estructurada de la Claude API; no se pide ni se muestra razonamiento interno.
-- **Aviso visible** en banner, pie de página, `/api/config` y en cada `RunSummary.disclaimer`.
+- **Aviso visible** en el pie de página, `/api/config` y en cada `RunSummary.disclaimer`
+  (el banner superior `DisclaimerBanner` existe como componente pero está desactivado; basta importarlo en `app/page.tsx`).
 
 ---
 
@@ -117,7 +136,7 @@ backend/
   requirements.txt · .env.example · Dockerfile
 frontend/
   app/                      page.tsx, layout.tsx, globals.css
-  components/               AnalysisForm, AgentGraph, AgentNode, EventLog, DecisionTable, MessageInspector, DisclaimerBanner
+  components/               AnalysisForm, AgentGraph, AgentNode, EventLog, DecisionTable, MessageInspector, DisclaimerBanner (desactivado)
   lib/                      api.ts, websocket.ts, types.ts, trace.ts (derivación de estado a partir de eventos)
   scripts/build-static.mjs  exporta el frontend a HTML estático (frontend/out)
   package.json · Dockerfile
@@ -208,10 +227,35 @@ Notas:
 
 | Variable | Valores | Notas |
 |---|---|---|
-| `LLM_PROVIDER` | `mock` (defecto) · `anthropic` | `anthropic` requiere `ANTHROPIC_API_KEY` (o perfil de `ant auth login`). Modelo por defecto `claude-opus-5`, `ANTHROPIC_EFFORT=low` (solo redacta resúmenes). |
+| `LLM_PROVIDER` | `mock` (defecto) · `openrouter` · `anthropic` | `openrouter` requiere `OPENROUTER_API_KEY` y acepta cualquier modelo del catálogo (`OPENROUTER_MODEL`, por defecto `anthropic/claude-sonnet-4.6`). `anthropic` usa la Claude API directa (`ANTHROPIC_API_KEY` o perfil de `ant auth login`, modelo `claude-opus-5`, `ANTHROPIC_EFFORT=low`). En ambos casos el LLM **solo redacta** las explicaciones. |
+| `LLM_MAX_CONCURRENCY` | entero | Llamadas LLM simultáneas como máximo (defecto 4); protege límites de tasa. |
+| `AGENT_MODE` | `llm` (defecto) · `rules` | Modo de los agentes por defecto (ver tabla de modos). |
+| `AGENT_MAX_STEPS` | entero | Turnos máximos del modelo por agente y tarea en modo `llm` (defecto 8). |
+| `RUNS_DIR` | ruta | Carpeta de persistencia de ejecuciones (defecto `backend/runs`; vacío = solo memoria). |
 | `MARKET_DATA_PROVIDER` | `mock` (defecto) · `yfinance` | `yfinance` descarga precios diarios reales (solo lectura). |
-| `DEMO_DELAY_MS` | ms | Retardo artificial del mock para que el flujo se vea en la UI. |
+| `DEMO_DELAY_MS` | ms | Latencia simulada de los proveedores mock (LLM y datos). |
+| `MESSAGE_DELAY_MS` | ms (0-5000) | Retardo aplicado a **cada mensaje entre agentes** (ida y vuelta) para seguir el flujo en el grafo. Valor por defecto; el formulario permite elegir el ritmo por ejecución (Rápido 0 · Normal 800 · Lento 1500 · Muy lento 3000) y la animación del grafo se ajusta a él. |
 | `MAX_PARALLEL_SYMBOLS` | entero | Símbolos analizados simultáneamente. |
+
+#### Usar OpenRouter
+
+```bash
+# backend/.env  (se carga automáticamente al arrancar; nunca lo subas al repo)
+LLM_PROVIDER=openrouter
+OPENROUTER_API_KEY=sk-or-v1-...          # https://openrouter.ai/keys
+OPENROUTER_MODEL=anthropic/claude-sonnet-4.6
+```
+
+Al arrancar, la cabecera de la UI muestra `LLM · openrouter:<modelo>` y cada evento `llm_call_completed` incluye
+tokens, modelo y proveedor upstream que sirvió la petición. El proveedor pide salida estructurada
+(`response_format: json_schema` + `provider.require_parameters`); si el modelo elegido no la soporta, reintenta con
+`json_object` y, en último término, extrae el JSON del texto. Errores de clave (401), crédito (402), modelo (404),
+límite de tasa (429) o proveedor caído se anotan en la traza y el agente continúa con la explicación por reglas.
+
+Coste orientativo por ejecución de 5 símbolos en modo `rules` (≈20 llamadas de ~1,5k tokens de entrada y ~250 de salida; en modo `llm` cuenta con 2–3× más llamadas por los turnos de herramientas):
+`anthropic/claude-sonnet-4.6` ≈ 0,11 $ · `anthropic/claude-haiku-4.5` ≈ 0,04 $ · `openai/gpt-4o-mini` ≈ 0,01 $.
+Modelos baratos con salida estructurada que funcionan bien para redactar: `anthropic/claude-haiku-4.5`,
+`google/gemini-2.5-flash`, `openai/gpt-4.1-mini`.
 
 Con `LLM_PROVIDER=anthropic` se usa salida estructurada (`output_config.format` JSON Schema) y, por defecto,
 fallback en servidor ante un `stop_reason: refusal` (`ANTHROPIC_ENABLE_FALLBACKS`). Si el LLM falla o su
@@ -248,7 +292,7 @@ Símbolos conocidos por el mock: AAPL, AMD, AMZN, GOOGL, IBE.MC, INTC, JPM, KO, 
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/api/runs` | `{"symbols": ["AAPL", ...]}` → `202 {run_id, symbols, rejected}` |
+| `POST` | `/api/runs` | `{"symbols": ["AAPL", ...], "message_delay_ms": 1500}` (opcional, 0-5000) → `202 {run_id, symbols, rejected, message_delay_ms}` |
 | `GET` | `/api/runs` | Lista de ejecuciones |
 | `GET` | `/api/runs/{run_id}` | Resumen y resultados |
 | `GET` | `/api/runs/{run_id}/events?after=0` | Eventos (auditoría / replay) |

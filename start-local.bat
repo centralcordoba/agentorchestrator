@@ -30,8 +30,8 @@ if not exist "..\frontend\out\index.html" (
 )
 
 echo [3/3] Arrancando en http://localhost:8000  (Ctrl+C para parar)
-if "%LLM_PROVIDER%"=="" set LLM_PROVIDER=mock
-if "%MARKET_DATA_PROVIDER%"=="" set MARKET_DATA_PROVIDER=mock
+REM Proveedores: se leen de backend\.env (LLM_PROVIDER, OPENROUTER_API_KEY, ...). Sin .env → todo mock.
+if exist ".env" (echo       Configuracion: backend\.env) else (echo       Configuracion: por defecto ^(mock^) - copia .env.example a .env para usar un LLM real)
 start "" http://localhost:8000
 .venv\Scripts\python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 goto :eof

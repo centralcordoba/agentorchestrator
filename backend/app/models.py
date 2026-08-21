@@ -71,6 +71,13 @@ class EventType(str, Enum):
     VALIDATION_WARNING = "validation_warning"
     DISAGREEMENT = "disagreement"
     DECISION_MADE = "decision_made"
+    TOOL_CALLED = "tool_called"              # modo llm: el agente invoca una herramienta
+    GUARDRAIL_APPLIED = "guardrail_applied"  # modo llm: una regla corrige la salida del modelo
+
+
+class AgentMode(str, Enum):
+    RULES = "rules"   # las reglas deciden; el LLM solo redacta
+    LLM = "llm"       # el LLM razona con herramientas; las reglas vigilan
 
 
 # ------------------------------------------------------------------------ messages
@@ -113,6 +120,13 @@ class LLMExplanation(BaseModel):
     validation_warnings: list[str] = Field(default_factory=list)
 
 
+class Evidence(BaseModel):
+    """Evidencia citada por un agente en modo llm: nombre exacto de un hecho + observación."""
+
+    fact: str
+    observation: str
+
+
 class AgentOpinion(BaseModel):
     agent: AgentName
     stance: Optional[Stance] = None
@@ -121,6 +135,10 @@ class AgentOpinion(BaseModel):
     confidence: float = 0.0
     facts: dict[str, Any] = Field(default_factory=dict)
     explanation: LLMExplanation
+    # Modo llm
+    mode: str = "rules"                                   # rules | llm | rules_fallback
+    evidence: list[Evidence] = Field(default_factory=list)
+    rule_reference: dict[str, Any] = Field(default_factory=dict)   # lo que habrían dicho las reglas
 
 
 class SymbolResult(BaseModel):
@@ -150,6 +168,24 @@ DISCLAIMER = (
 )
 
 
+class AgentCost(BaseModel):
+    """Consumo LLM acumulado (por agente o total)."""
+
+    calls: int = 0
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cost_usd: Optional[float] = None          # None si ninguna llamada informó coste
+    cost_known_calls: int = 0                 # llamadas con coste conocido (proveedor o estimado)
+    sources: dict[str, int] = Field(default_factory=dict)   # provider | estimated | mock | unknown → nº llamadas
+    models: dict[str, int] = Field(default_factory=dict)    # modelo → nº llamadas
+
+
+class CostSummary(BaseModel):
+    currency: str = "USD"
+    per_agent: dict[str, AgentCost] = Field(default_factory=dict)
+    total: AgentCost = Field(default_factory=AgentCost)
+
+
 class RunSummary(BaseModel):
     run_id: str
     status: RunStatus
@@ -158,15 +194,24 @@ class RunSummary(BaseModel):
     finished_at: Optional[datetime] = None
     results: dict[str, SymbolResult] = Field(default_factory=dict)
     providers: dict[str, str] = Field(default_factory=dict)
+    message_delay_ms: int = 0
+    agent_mode: AgentMode = AgentMode.RULES
+    costs: Optional[CostSummary] = None
     disclaimer: str = DISCLAIMER
 
 
 # ------------------------------------------------------------------------- api io
 class RunRequest(BaseModel):
     symbols: list[str] = Field(..., min_length=1, max_length=20)
+    # Retardo por mensaje entre agentes (ms). None → valor por defecto del servidor.
+    message_delay_ms: Optional[int] = Field(default=None, ge=0, le=5000)
+    # Modo de los agentes. None → valor por defecto del servidor (AGENT_MODE).
+    agent_mode: Optional[AgentMode] = None
 
 
 class RunCreated(BaseModel):
     run_id: str
     symbols: list[str]
     rejected: dict[str, str] = Field(default_factory=dict)
+    message_delay_ms: int = 0
+    agent_mode: AgentMode = AgentMode.RULES

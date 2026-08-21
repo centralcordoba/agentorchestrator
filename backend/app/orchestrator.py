@@ -39,6 +39,7 @@ from .models import (
 )
 from .providers.llm_provider import LLMProvider
 from .providers.market_data_provider import MarketDataProvider
+from .services.costs import summarize_costs
 from .services.run_store import RunStore
 
 log = logging.getLogger(__name__)
@@ -55,23 +56,39 @@ class Orchestrator:
         llm: LLMProvider,
         market: MarketDataProvider,
         settings: Settings,
+        message_delay_ms: Optional[int] = None,
+        agent_mode: Optional[str] = None,
     ) -> None:
         self.run_id = run_id
         self.symbols = symbols
         self.bus = bus
         self.store = store
         self.settings = settings
+        delay = settings.message_delay_ms if message_delay_ms is None else message_delay_ms
+        self.message_delay_ms = max(0, min(int(delay), settings.max_message_delay_ms))
+        mode = (agent_mode or settings.agent_mode or "rules").lower()
+        self.agent_mode = mode if mode in ("rules", "llm") else "rules"
         self.ctx = AgentContext(
-            run_id=run_id, bus=bus, llm=llm, market=market, settings=settings, deliver=self.deliver
+            run_id=run_id, bus=bus, llm=llm, market=market, settings=settings, deliver=self.deliver, agent_mode=self.agent_mode
         )
         self.agents: dict[AgentName, BaseAgent] = {
             a.name: a for a in (MarketDataAgent(self.ctx), TechnicalAgent(self.ctx), RiskAgent(self.ctx), SkepticAgent(self.ctx), DecisionAgent(self.ctx))
         }
 
     # ------------------------------------------------------------------ routing
+    async def _transit(self) -> None:
+        """Latencia simulada del 'canal' entre agentes (se aplica a cada salto)."""
+        if self.message_delay_ms > 0:
+            await asyncio.sleep(self.message_delay_ms / 1000)
+
     async def deliver(self, message: AgentMessage) -> AgentMessage:
-        """Único camino por el que viaja un mensaje: se publica y se entrega al destinatario."""
+        """Único camino por el que viaja un mensaje: se publica, 'viaja' y se entrega al destinatario.
+
+        El evento se emite ANTES del retardo para que la UI muestre el mensaje en tránsito
+        mientras el destinatario aún no ha empezado a trabajar.
+        """
         await self.bus.emit_message(message)
+        await self._transit()
         target = self.agents.get(message.recipient)
         if target is None:
             return AgentMessage(
@@ -85,6 +102,7 @@ class Orchestrator:
             )
         response = await target.handle(message)
         await self.bus.emit_message(response)
+        await self._transit()  # la respuesta también viaja de vuelta
         return response
 
     async def ask(self, recipient: AgentName, payload: dict, symbol: str, in_reply_to: Optional[str] = None) -> AgentMessage:
@@ -109,6 +127,8 @@ class Orchestrator:
             data={
                 "symbols": self.symbols,
                 "max_parallel": self.settings.max_parallel_symbols,
+                "message_delay_ms": self.message_delay_ms,
+                "agent_mode": self.agent_mode,
                 "agents": {a.name.value: a.description for a in self.agents.values()},
                 "llm_provider": self.ctx.llm.name,
                 "market_data_provider": self.ctx.market.name,
@@ -129,6 +149,9 @@ class Orchestrator:
         await asyncio.gather(*(guarded(s) for s in self.symbols))
 
         run = self.store.get(self.run_id)
+        costs = summarize_costs(self.store.events(self.run_id))
+        if run is not None:
+            run.costs = costs
         self.store.set_status(self.run_id, RunStatus.COMPLETED)
         await self.bus.emit(
             self.run_id,
@@ -137,6 +160,7 @@ class Orchestrator:
             data={
                 "results": {s: r.decision.value for s, r in (run.results.items() if run else [])},
                 "symbols_total": len(self.symbols),
+                "costs": costs.model_dump(mode="json"),
             },
         )
 

@@ -1,78 +1,133 @@
 "use client";
 
 import { describeEvent, formatTime } from "@/lib/trace";
-import { AGENT_COLORS, AGENT_LABELS, MESSAGE_TYPE_LABELS, type LLMExplanation, type RunEvent } from "@/lib/types";
+import {
+  AGENT_COLORS,
+  AGENT_LABELS,
+  AGENT_SOFT_COLORS,
+  MESSAGE_TYPE_LABELS,
+  type Evidence,
+  type LLMExplanation,
+  type RunEvent,
+} from "@/lib/types";
 
 interface Props {
   event: RunEvent | null;
   onJumpToMessage: (messageId: string) => void;
 }
 
+interface Guardrail {
+  rule: string;
+  before: unknown;
+  after: unknown;
+  reason: string;
+}
+
+interface Counterargument {
+  code: string;
+  text: string;
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex gap-2 text-xs">
-      <span className="w-24 shrink-0 text-slate-500">{label}</span>
-      <span className="min-w-0 flex-1 break-words text-slate-200">{children}</span>
+    <div className="flex gap-3 text-[12.5px]">
+      <span className="w-24 shrink-0 text-ink-400">{label}</span>
+      <span className="min-w-0 flex-1 break-words text-ink-900">{children}</span>
     </div>
   );
 }
 
-function Explanation({ ex }: { ex: LLMExplanation }) {
+function Section({ title, children, tone = "neutral" }: { title: string; children: React.ReactNode; tone?: "neutral" | "accent" | "violet" | "warn" }) {
+  const cls = {
+    neutral: "border-line bg-sunken/60",
+    accent: "border-accent/20 bg-accent-soft/60",
+    violet: "border-violet/20 bg-violet-soft/60",
+    warn: "border-warn/30 bg-warn-soft/60",
+  }[tone];
   return (
-    <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 p-3 text-xs">
-      <div className="mb-1 flex items-center justify-between">
-        <span className="font-semibold text-violet-200">Explicación auditable</span>
-        <span className="chip border-violet-500/40 text-violet-300">generada por: {ex.generated_by}</span>
+    <div className={`rounded-lg border p-3 text-[12.5px] ${cls}`}>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">{title}</div>
+      {children}
+    </div>
+  );
+}
+
+function fmt(v: unknown): string {
+  if (v === null || v === undefined) return "—";
+  if (typeof v === "object") return JSON.stringify(v);
+  return String(v);
+}
+
+function ExplanationBlock({ ex, mode }: { ex: LLMExplanation; mode?: string }) {
+  return (
+    <Section title="Explicación auditable" tone="accent">
+      <div className="mb-1.5 flex flex-wrap items-center gap-1.5">
+        <span className="chip border-accent/30 bg-surface text-accent">generada por · {ex.generated_by}</span>
+        {mode && <span className={`chip ${mode === "llm" ? "border-violet/30 bg-surface text-violet" : "chip-neutral"}`}>modo · {mode}</span>}
       </div>
-      <p className="text-slate-200">{ex.summary}</p>
+      <p className="leading-5 text-ink-700">{ex.summary}</p>
       {ex.facts_used?.length > 0 && (
-        <p className="mt-2 text-slate-400">
-          <span className="text-slate-500">hechos usados:</span> {ex.facts_used.join(", ")}
+        <p className="mt-2 font-mono text-[11px] leading-5 text-ink-500">
+          <span className="text-ink-400">hechos usados:</span> {ex.facts_used.join(", ")}
         </p>
       )}
       {ex.caveats?.length > 0 && (
-        <ul className="mt-1 list-disc pl-4 text-slate-400">
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-ink-500">
           {ex.caveats.map((c, i) => (
             <li key={i}>{c}</li>
           ))}
         </ul>
       )}
       {ex.validation_warnings?.length > 0 && (
-        <ul className="mt-1 list-disc pl-4 text-amber-300">
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4 text-[12px] text-warn">
           {ex.validation_warnings.map((c, i) => (
             <li key={i}>{c}</li>
           ))}
         </ul>
       )}
-    </div>
+    </Section>
   );
 }
 
 export default function MessageInspector({ event, onJumpToMessage }: Props) {
   if (!event) {
     return (
-      <div className="panel flex h-full flex-col">
+      <div className="panel flex h-full flex-col overflow-hidden">
         <div className="panel-title">
           <span>Inspector de mensajes</span>
         </div>
-        <p className="p-4 text-sm text-slate-500">
-          Selecciona un evento de la traza, una arista del grafo o una fila de la tabla para ver el mensaje completo.
-        </p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-1 p-6 text-center">
+          <p className="text-[13px] text-ink-700">Nada seleccionado</p>
+          <p className="max-w-xs text-[12px] leading-5 text-ink-400">
+            Elige un evento de la traza, una arista del grafo o una fila de la tabla para ver el mensaje completo.
+          </p>
+        </div>
       </div>
     );
   }
 
   const m = event.message;
-  const payload = m?.payload ?? event.data;
-  const explanation = (payload as { explanation?: LLMExplanation }).explanation;
-  const { explanation: _omit, ...rest } = payload as Record<string, unknown>;
-  void _omit;
+  const payload = (m?.payload ?? event.data) as Record<string, unknown>;
+  const explanation = payload.explanation as LLMExplanation | undefined;
+  const evidence = (payload.evidence as Evidence[] | undefined) ?? [];
+  const guardrails = (payload.guardrails as Guardrail[] | undefined) ?? [];
+  const counterarguments = (payload.counterarguments as Counterargument[] | undefined) ?? [];
+  const ruleReference = (payload.rule_reference as Record<string, unknown> | undefined) ?? {};
+  const mode = typeof payload.mode === "string" ? payload.mode : undefined;
+  const { explanation: _e, evidence: _v, guardrails: _g, rule_reference: _r, ...rest } = payload;
+  void _e;
+  void _v;
+  void _g;
+  void _r;
+
+  const isToolEvent = event.type === "tool_called";
+  const isGuardrailEvent = event.type === "guardrail_applied";
 
   return (
-    <div className="panel flex h-full min-h-0 flex-col">
+    <div className="panel flex h-full min-h-0 flex-col overflow-hidden">
       <div className="panel-title">
         <span>Inspector · evento #{event.seq}</span>
-        <span className="font-mono normal-case tracking-normal text-slate-500">{formatTime(event.timestamp)}</span>
+        <span className="font-mono normal-case tracking-normal text-ink-400">{formatTime(event.timestamp)}</span>
       </div>
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
         <Row label="tipo de evento">
@@ -80,29 +135,29 @@ export default function MessageInspector({ event, onJumpToMessage }: Props) {
         </Row>
         {event.symbol && (
           <Row label="símbolo">
-            <span className="font-mono">{event.symbol}</span>
+            <span className="font-mono font-semibold">{event.symbol}</span>
           </Row>
         )}
         <Row label="resumen">{describeEvent(event)}</Row>
 
         {m && (
-          <div className="rounded-lg border border-ink-700 bg-ink-950 p-3">
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
-              <span className="chip" style={{ borderColor: AGENT_COLORS[m.sender], color: AGENT_COLORS[m.sender] }}>
+          <div className="rounded-lg border border-line bg-sunken/60 p-3">
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-[12px]">
+              <span className="chip border-transparent font-sans font-medium" style={{ background: AGENT_SOFT_COLORS[m.sender], color: AGENT_COLORS[m.sender] }}>
                 {AGENT_LABELS[m.sender]}
               </span>
-              <span className="text-slate-500">→</span>
-              <span className="chip" style={{ borderColor: AGENT_COLORS[m.recipient], color: AGENT_COLORS[m.recipient] }}>
+              <span className="text-ink-400">→</span>
+              <span className="chip border-transparent font-sans font-medium" style={{ background: AGENT_SOFT_COLORS[m.recipient], color: AGENT_COLORS[m.recipient] }}>
                 {AGENT_LABELS[m.recipient]}
               </span>
-              <span className="chip border-ink-600 text-slate-300">{MESSAGE_TYPE_LABELS[m.type]}</span>
+              <span className="chip chip-neutral">{MESSAGE_TYPE_LABELS[m.type]}</span>
             </div>
             <Row label="id">
-              <span className="font-mono">{m.id}</span>
+              <span className="font-mono text-ink-500">{m.id}</span>
             </Row>
             {m.in_reply_to && (
               <Row label="responde a">
-                <button onClick={() => onJumpToMessage(m.in_reply_to!)} className="font-mono text-sky-300 underline-offset-2 hover:underline">
+                <button onClick={() => onJumpToMessage(m.in_reply_to!)} className="font-mono text-accent underline-offset-2 hover:underline">
                   {m.in_reply_to}
                 </button>
               </Row>
@@ -110,13 +165,90 @@ export default function MessageInspector({ event, onJumpToMessage }: Props) {
           </div>
         )}
 
-        {explanation && <Explanation ex={explanation} />}
+        {isToolEvent && (
+          <Section title="Llamada a herramienta" tone="violet">
+            <Row label="herramienta">
+              <span className="font-mono">{fmt(event.data.tool)}</span>
+            </Row>
+            <Row label="argumentos">
+              <span className="font-mono text-[11.5px]">{fmt(event.data.arguments)}</span>
+            </Row>
+            <div className="mt-1.5 text-[11px] text-ink-400">resultado (código determinista → hechos disponibles para el modelo)</div>
+            <pre className="mt-1 max-h-48 overflow-auto rounded-md border border-line bg-surface p-2 font-mono text-[11px] leading-5 text-ink-700">
+              {JSON.stringify(event.data.result, null, 2)}
+            </pre>
+          </Section>
+        )}
+
+        {isGuardrailEvent && (
+          <Section title="Guardarraíl aplicado" tone="warn">
+            <p className="font-medium text-ink-900">{fmt(event.data.rule)}</p>
+            <p className="mt-1 text-ink-700">{fmt(event.data.reason)}</p>
+            <p className="mt-1 font-mono text-[11.5px] text-ink-500">
+              antes: {fmt(event.data.before)} → después: {fmt(event.data.after)}
+            </p>
+          </Section>
+        )}
+
+        {explanation && <ExplanationBlock ex={explanation} mode={mode} />}
+
+        {evidence.length > 0 && (
+          <Section title="Evidencia citada por el agente" tone="violet">
+            <ul className="space-y-1">
+              {evidence.map((e, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="shrink-0 font-mono text-[11.5px] text-violet">{e.fact}</span>
+                  <span className="text-ink-700">{e.observation}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {counterarguments.length > 0 && (
+          <Section title="Objeciones" tone="warn">
+            <ul className="space-y-1">
+              {counterarguments.map((c, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className="shrink-0 font-mono text-[11.5px] text-warn">{c.code}</span>
+                  <span className="text-ink-700">{c.text}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {guardrails.length > 0 && (
+          <Section title="Guardarraíles aplicados" tone="warn">
+            <ul className="space-y-1.5">
+              {guardrails.map((g, i) => (
+                <li key={i}>
+                  <p className="font-medium text-ink-900">{g.rule}</p>
+                  <p className="text-ink-700">{g.reason}</p>
+                  <p className="font-mono text-[11px] text-ink-500">
+                    {fmt(g.before)} → {fmt(g.after)}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
+
+        {Object.keys(ruleReference).length > 0 && (
+          <Section title="Qué habrían dicho las reglas">
+            <p className="font-mono text-[11.5px] text-ink-700">
+              {Object.entries(ruleReference)
+                .map(([k, v]) => `${k} = ${fmt(v)}`)
+                .join(" · ")}
+            </p>
+          </Section>
+        )}
 
         <div>
-          <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">
             {m ? "payload del mensaje" : "datos del evento"}
           </div>
-          <pre className="max-h-[420px] overflow-auto rounded-lg border border-ink-700 bg-ink-950 p-3 font-mono text-[11px] leading-5 text-slate-300">
+          <pre className="max-h-[420px] overflow-auto rounded-lg border border-line bg-sunken p-3 font-mono text-[11px] leading-5 text-ink-700">
             {JSON.stringify(rest, null, 2)}
           </pre>
         </div>

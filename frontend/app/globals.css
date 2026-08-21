@@ -3,53 +3,75 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 html,
 body {
   height: 100%;
-  background: #0b0f17;
-  color: #e5e7eb;
+  background: #faf9f5;
+  color: #1f1e1d;
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2f3b54 transparent;
+  scrollbar-color: #d5d1c5 transparent;
 }
 
-@keyframes pulse-ring {
-  0% {
-    transform: scale(0.9);
-    opacity: 0.8;
-  }
-  100% {
-    transform: scale(1.6);
-    opacity: 0;
-  }
+::selection {
+  background: #f7eae3;
+  color: #1f1e1d;
 }
 
+/* Nodo del grafo en ejecución: halo suave en el acento */
 .node-working {
   animation: node-glow 1.2s ease-in-out infinite alternate;
 }
 
 @keyframes node-glow {
   from {
-    filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.2));
+    filter: drop-shadow(0 0 0 rgba(194, 86, 46, 0));
   }
   to {
-    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.55));
+    filter: drop-shadow(0 0 6px rgba(194, 86, 46, 0.45));
   }
 }
 
-.panel {
-  @apply rounded-xl border border-ink-700 bg-ink-900/80;
-}
+@layer components {
+  .panel {
+    @apply rounded-xl border border-line bg-surface shadow-panel;
+  }
 
-.panel-title {
-  @apply flex items-center justify-between border-b border-ink-700 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-400;
-}
+  .panel-title {
+    @apply flex items-center justify-between gap-3 border-b border-line px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500;
+  }
 
-.chip {
-  @apply inline-flex items-center rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-4;
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 font-mono text-[11px] leading-4;
+  }
+
+  .chip-neutral {
+    @apply border-line bg-sunken text-ink-700;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white transition hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-ring disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center rounded-md border border-line bg-surface px-2 py-1 text-[11px] text-ink-700 transition hover:border-line-strong hover:bg-sunken;
+  }
+
+  .pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[11px] transition;
+  }
+
+  .pill-idle {
+    @apply border-line bg-surface text-ink-500 hover:border-line-strong hover:text-ink-900;
+  }
+
+  .pill-active {
+    @apply border-ink-900 bg-ink-900 text-white;
+  }
 }

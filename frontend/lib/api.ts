@@ -1,4 +1,4 @@
-import type { AppConfig, RunCreated, RunEvent, RunSummary } from "./types";
+import type { AgentMode, AppConfig, RunCreated, RunEvent, RunSummary } from "./types";
 
 /**
  * URL base del backend.
@@ -43,8 +43,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   config: () => request<AppConfig>("/api/config"),
-  createRun: (symbols: string[]) =>
-    request<RunCreated>("/api/runs", { method: "POST", body: JSON.stringify({ symbols }) }),
+  createRun: (symbols: string[], messageDelayMs?: number, agentMode?: AgentMode) =>
+    request<RunCreated>("/api/runs", {
+      method: "POST",
+      body: JSON.stringify({ symbols, message_delay_ms: messageDelayMs ?? null, agent_mode: agentMode ?? null }),
+    }),
+  listRuns: () => request<RunSummary[]>("/api/runs"),
   getRun: (runId: string) => request<RunSummary>(`/api/runs/${runId}`),
   getEvents: (runId: string, after = 0) => request<RunEvent[]>(`/api/runs/${runId}/events?after=${after}`),
 };

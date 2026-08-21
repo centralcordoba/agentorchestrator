@@ -25,7 +25,12 @@ export function connectRunSocket(
   let ws: WebSocket | null = null;
   let closedByUser = false;
   let attempt = 0;
+  let openedAt = 0;
   let pingTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Los eventos que llegan en ráfaga justo tras abrir la conexión son historial (replay):
+  // no se marcan como "recientes" para no animar todo el grafo de golpe.
+  const REPLAY_WINDOW_MS = 400;
 
   const open = () => {
     onStatus("connecting");
@@ -33,13 +38,15 @@ export function connectRunSocket(
 
     ws.onopen = () => {
       attempt = 0;
+      openedAt = Date.now();
       onStatus("open");
       pingTimer = setInterval(() => ws?.readyState === WebSocket.OPEN && ws.send("ping"), 20000);
     };
     ws.onmessage = (ev) => {
       try {
         const event = JSON.parse(ev.data) as RunEvent;
-        event.receivedAt = Date.now();
+        const now = Date.now();
+        if (now - openedAt > REPLAY_WINDOW_MS) event.receivedAt = now;
         onEvent(event);
       } catch {
         /* mensaje no JSON: ignorar */

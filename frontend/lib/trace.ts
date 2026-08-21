@@ -29,6 +29,17 @@ export function symbolsFromEvents(events: RunEvent[]): string[] {
   return Array.from(set);
 }
 
+/** Parámetros de la ejecución anunciados en `run_started`. */
+export function runSettingsFromEvents(events: RunEvent[]): { messageDelayMs: number | null; agentMode: "rules" | "llm" | null } {
+  const start = events.find((e) => e.type === "run_started");
+  const raw = start?.data.message_delay_ms;
+  const mode = start?.data.agent_mode;
+  return {
+    messageDelayMs: typeof raw === "number" ? raw : null,
+    agentMode: mode === "llm" || mode === "rules" ? mode : null,
+  };
+}
+
 export function resultsFromEvents(events: RunEvent[]): Record<string, SymbolResult> {
   const out: Record<string, SymbolResult> = {};
   for (const e of events) {
@@ -118,7 +129,7 @@ export function describeEvent(e: RunEvent): string {
   const d = e.data;
   switch (e.type) {
     case "run_started":
-      return `Ejecución iniciada · ${(d.symbols as string[]).join(", ")} · paralelismo ${d.max_parallel} · LLM ${d.llm_provider} · datos ${d.market_data_provider}`;
+      return `Ejecución iniciada · ${(d.symbols as string[]).join(", ")} · modo ${d.agent_mode ?? "rules"} · paralelismo ${d.max_parallel} · retardo por mensaje ${d.message_delay_ms ?? 0} ms · LLM ${d.llm_provider} · datos ${d.market_data_provider}`;
     case "run_completed":
       return `Ejecución completada · ${Object.entries((d.results as Record<string, string>) || {})
         .map(([s, r]) => `${s}=${r}`)
@@ -155,11 +166,22 @@ export function describeEvent(e: RunEvent): string {
       return `${AGENT_LABELS[m.sender]} → ${AGENT_LABELS[m.recipient]} · ${MESSAGE_TYPE_LABELS[m.type]}${hint ? ` · ${hint}` : ""}`;
     }
     case "llm_call_started":
-      return `Llamada LLM (${d.task}) · proveedor ${d.provider}`;
-    case "llm_call_completed":
-      return d.ok
-        ? `LLM respondió (${d.task}) · generado por ${d.generated_by}${Number(d.warnings) ? ` · ${d.warnings} avisos` : ""}`
-        : `LLM falló (${d.task}): ${str(d.error)} → fallback ${d.fallback}`;
+      return d.mode === "llm"
+        ? `Turno ${d.step} del agente (${d.task}) · herramientas: ${((d.tools as string[]) || []).join(", ") || "ninguna"} · ${d.provider}`
+        : `Llamada LLM (${d.task}) · proveedor ${d.provider}`;
+    case "llm_call_completed": {
+      if (!d.ok) return `LLM falló (${d.task}${d.step ? ` · turno ${d.step}` : ""}): ${str(d.error)} → fallback ${d.fallback}`;
+      const calls = (d.tool_calls as string[] | undefined) ?? [];
+      if (d.step) return calls.length ? `El modelo pide herramientas: ${calls.join(", ")}` : `El modelo entrega su respuesta final (${d.task})`;
+      return `LLM respondió (${d.task}) · generado por ${d.generated_by}${Number(d.warnings) ? ` · ${d.warnings} avisos` : ""}`;
+    }
+    case "tool_called": {
+      const res = d.result as Record<string, unknown> | undefined;
+      const err = res && typeof res.error === "string" ? ` → error: ${str(res.error, 60)}` : "";
+      return `Herramienta ${d.tool}(${str(d.arguments, 60)})${err}`;
+    }
+    case "guardrail_applied":
+      return `Guardarraíl ${str(d.rule, 70)} · ${str(d.before, 40)} → ${str(d.after, 40)}`;
     case "validation_warning":
       return `Validación: ${(d.warnings as string[]).join(" | ")}${d.discarded ? " · explicación descartada" : ""}`;
     case "disagreement":
@@ -174,6 +196,6 @@ export function describeEvent(e: RunEvent): string {
 export const EVENT_GROUPS: Record<string, RunEvent["type"][]> = {
   mensajes: ["message_sent"],
   agentes: ["agent_started", "agent_completed", "agent_error"],
-  llm: ["llm_call_started", "llm_call_completed", "validation_warning"],
-  sistema: ["run_started", "run_completed", "symbol_started", "symbol_completed", "disagreement", "decision_made"],
+  llm: ["llm_call_started", "llm_call_completed", "validation_warning", "tool_called"],
+  sistema: ["run_started", "run_completed", "symbol_started", "symbol_completed", "disagreement", "decision_made", "guardrail_applied"],
 };

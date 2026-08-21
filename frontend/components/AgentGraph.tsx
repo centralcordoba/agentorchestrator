@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import AgentNode, { NODE_H, NODE_W } from "./AgentNode";
-import { AGENTS, computeNodeStats } from "@/lib/trace";
+import { AGENTS, computeNodeStats, runSettingsFromEvents } from "@/lib/trace";
 import { MESSAGE_TYPE_LABELS, type AgentName, type MessageType, type RunEvent } from "@/lib/types";
 
 const POS: Record<AgentName, { x: number; y: number }> = {
@@ -16,8 +16,10 @@ const POS: Record<AgentName, { x: number; y: number }> = {
 
 const VIEW_W = 1000;
 const VIEW_H = 330;
-const ANIM_MS = 1400;
-const HOT_MS = 2200;
+// Duración de la animación del mensaje en tránsito: sigue al retardo configurado en la ejecución
+// (el punto tarda en cruzar la arista aproximadamente lo que el mensaje tarda en "llegar").
+const ANIM_MIN_MS = 900;
+const ANIM_MAX_MS = 4000;
 
 interface Edge {
   from: AgentName;
@@ -43,7 +45,6 @@ function edgePath(from: AgentName, to: AgentName): string {
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const len = Math.hypot(dx, dy) || 1;
-  // desplazamiento perpendicular constante según el sentido (from<to vs to<from)
   const sign = AGENTS.indexOf(from) < AGENTS.indexOf(to) ? -1 : 1;
   const nx = (-dy / len) * 14 * sign;
   const ny = (dx / len) * 14 * sign;
@@ -53,15 +54,19 @@ function edgePath(from: AgentName, to: AgentName): string {
 }
 
 const TYPE_COLOR: Record<MessageType, string> = {
-  task_request: "#94a3b8",
-  task_result: "#38bdf8",
-  info_request: "#fbbf24",
-  info_response: "#fbbf24",
-  opinion: "#34d399",
-  challenge: "#f472b6",
-  decision: "#f97316",
-  error: "#f43f5e",
+  task_request: "#8C887F",
+  task_result: "#2F6F8F",
+  info_request: "#9A6700",
+  info_response: "#9A6700",
+  opinion: "#2E7D5B",
+  challenge: "#A8445C",
+  decision: "#C2562E",
+  error: "#B3362B",
 };
+
+const EDGE_IDLE = "#E7E4DB";
+const EDGE_USED = "#B3AFA6";
+const EDGE_HOT = "#1F1E1D";
 
 interface Props {
   events: RunEvent[];
@@ -83,16 +88,15 @@ export default function AgentGraph({ events, symbol, running, selectedAgent, onS
   }, [running]);
 
   const stats = useMemo(() => computeNodeStats(events, symbol), [events, symbol]);
+  const { messageDelayMs } = useMemo(() => runSettingsFromEvents(events), [events]);
+  const animMs = Math.max(ANIM_MIN_MS, Math.min(ANIM_MAX_MS, (messageDelayMs ?? 800) * 0.95));
+  const hotMs = animMs + 800;
 
   const messages = useMemo(
-    () =>
-      events.filter(
-        (e) => e.type === "message_sent" && e.message && (symbol === "all" || e.symbol === symbol),
-      ),
+    () => events.filter((e) => e.type === "message_sent" && e.message && (symbol === "all" || e.symbol === symbol)),
     [events, symbol],
   );
 
-  // Aristas: todas las combinaciones que hayan transportado al menos un mensaje, más la topología base.
   const edges = useMemo(() => {
     const base: [AgentName, AgentName][] = [
       ["orchestrator", "market_data"],
@@ -128,50 +132,51 @@ export default function AgentGraph({ events, symbol, running, selectedAgent, onS
     total += 1;
     lastByEdge.set(`${e.message!.sender}>${e.message!.recipient}`, e);
   });
-  const animated = messages.filter((e) => e.receivedAt && now - e.receivedAt < ANIM_MS).slice(-24);
+  const animated = messages.filter((e) => e.receivedAt && now - e.receivedAt < animMs).slice(-24);
 
   return (
-    <div className="panel">
+    <div className="panel overflow-hidden">
       <div className="panel-title">
         <span>Grafo de agentes · {symbol === "all" ? "todos los símbolos" : symbol}</span>
-        <span className="font-mono normal-case tracking-normal text-slate-500">{total} mensajes</span>
+        <span className="font-mono normal-case tracking-normal text-ink-400">{total} mensajes</span>
       </div>
       <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="h-auto w-full" role="img" aria-label="Grafo de comunicación entre agentes">
         <defs>
           <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_USED} />
+          </marker>
+          <marker id="arrow-idle" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_IDLE} />
           </marker>
           <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-            <path d="M 0 0 L 10 5 L 0 10 z" fill="#e2e8f0" />
+            <path d="M 0 0 L 10 5 L 0 10 z" fill={EDGE_HOT} />
           </marker>
         </defs>
 
         {/* etiquetas de fase */}
-        <g fontSize={10} fill="#475569" fontFamily="ui-monospace, monospace">
-          <text x={POS.orchestrator.x} y={18} textAnchor="middle">1. inicia</text>
-          <text x={POS.market_data.x} y={18} textAnchor="middle">2. datos</text>
-          <text x={POS.technical.x} y={18} textAnchor="middle">3. análisis en paralelo</text>
-          <text x={POS.skeptic.x} y={18} textAnchor="middle">4. revisión crítica</text>
-          <text x={POS.decision.x} y={18} textAnchor="middle">5. decisión</text>
+        <g fontSize={10} fill="#8C887F" fontFamily="ui-monospace, monospace">
+          <text x={POS.orchestrator.x} y={18} textAnchor="middle">1 · inicia</text>
+          <text x={POS.market_data.x} y={18} textAnchor="middle">2 · datos</text>
+          <text x={POS.technical.x} y={18} textAnchor="middle">3 · análisis en paralelo</text>
+          <text x={POS.skeptic.x} y={18} textAnchor="middle">4 · revisión crítica</text>
+          <text x={POS.decision.x} y={18} textAnchor="middle">5 · decisión</text>
         </g>
 
         {edges.map((edge) => {
           const last = lastByEdge.get(edge.key);
-          const hot = last?.receivedAt ? now - last.receivedAt < HOT_MS : false;
+          const hot = last?.receivedAt ? now - last.receivedAt < hotMs : false;
           const used = Boolean(last);
-          const dashed = edge.from === "risk" && edge.to === "market_data" ? "6 4" : edge.from === "skeptic" && edge.to === "technical" ? "6 4" : undefined;
+          const direct = (edge.from === "risk" && edge.to === "market_data") || (edge.from === "skeptic" && edge.to === "technical");
           return (
             <g key={edge.key} onClick={() => last && onSelectEvent(last)} className={last ? "cursor-pointer" : ""}>
               <path
                 d={edge.path}
                 fill="none"
-                stroke={hot ? "#e2e8f0" : used ? "#64748b" : "#2f3b54"}
-                strokeWidth={hot ? 2.4 : 1.4}
-                strokeDasharray={dashed}
-                markerEnd={hot ? "url(#arrow-hot)" : "url(#arrow)"}
-                opacity={used ? 1 : 0.7}
+                stroke={hot ? EDGE_HOT : used ? EDGE_USED : EDGE_IDLE}
+                strokeWidth={hot ? 2.2 : 1.4}
+                strokeDasharray={direct ? "6 4" : undefined}
+                markerEnd={hot ? "url(#arrow-hot)" : used ? "url(#arrow)" : "url(#arrow-idle)"}
               />
-              {/* zona de clic más amplia */}
               <path d={edge.path} fill="none" stroke="transparent" strokeWidth={12} />
             </g>
           );
@@ -184,8 +189,8 @@ export default function AgentGraph({ events, symbol, running, selectedAgent, onS
           if (!edge) return null;
           return (
             <g key={m.id}>
-              <circle r={6} fill={TYPE_COLOR[m.type]} stroke="#0b0f17" strokeWidth={1.5}>
-                <animateMotion dur={`${ANIM_MS / 1000}s`} path={edge.path} fill="freeze" />
+              <circle r={6} fill={TYPE_COLOR[m.type]} stroke="#FFFFFF" strokeWidth={1.5}>
+                <animateMotion dur={`${animMs / 1000}s`} path={edge.path} fill="freeze" />
               </circle>
             </g>
           );
@@ -202,9 +207,8 @@ export default function AgentGraph({ events, symbol, running, selectedAgent, onS
             onClick={() => onSelectAgent(selectedAgent === name ? null : name)}
           />
         ))}
-
       </svg>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-ink-700 px-4 py-2 font-mono text-[10.5px] text-slate-400">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-line bg-sunken/60 px-4 py-2 font-mono text-[10.5px] text-ink-500">
         {(Object.keys(TYPE_COLOR) as MessageType[]).map((t) => (
           <span key={t} className="inline-flex items-center gap-1.5">
             <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: TYPE_COLOR[t] }} />
@@ -213,7 +217,7 @@ export default function AgentGraph({ events, symbol, running, selectedAgent, onS
         ))}
         <span className="ml-auto inline-flex items-center gap-1.5">
           <svg width="26" height="6" aria-hidden>
-            <line x1="0" y1="3" x2="26" y2="3" stroke="#94a3b8" strokeDasharray="6 4" />
+            <line x1="0" y1="3" x2="26" y2="3" stroke="#8C887F" strokeDasharray="6 4" />
           </svg>
           comunicación directa entre agentes
         </span>

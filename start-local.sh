@@ -33,7 +33,7 @@ if [ ! -f "../frontend/out/index.html" ]; then
   echo
 fi
 
-export LLM_PROVIDER=${LLM_PROVIDER:-mock}
-export MARKET_DATA_PROVIDER=${MARKET_DATA_PROVIDER:-mock}
+# Proveedores: se leen de backend/.env (LLM_PROVIDER, OPENROUTER_API_KEY, ...). Sin .env → todo mock.
+if [ -f .env ]; then echo "      Configuración: backend/.env"; else echo "      Configuración: por defecto (mock) — copia .env.example a .env para usar un LLM real"; fi
 echo "[3/3] Arrancando en http://localhost:8000  (Ctrl+C para parar)"
 exec "$VENV_PY" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
