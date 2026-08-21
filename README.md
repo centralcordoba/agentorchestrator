@@ -12,6 +12,8 @@ El dominio (análisis técnico) es solo una excusa pedagógica: lo importante es
 
 ---
 
+> Explicación paso a paso de la comunicación entre agentes (clases, mensajes, eventos, modos y guardarraíles): **[docs/COMO_FUNCIONA.md](docs/COMO_FUNCIONA.md)**.
+
 ## 1. Qué enseña la demo y dónde verlo
 
 | # | Objetivo pedagógico | Dónde ocurre (backend) | Cómo se ve (frontend) |
@@ -38,6 +40,30 @@ El dominio (análisis técnico) es solo una excusa pedagógica: lo importante es
 | Reproducible | Sí | Solo con el proveedor `mock` (sigue un guion); con un modelo real, guarda y reabre la ejecución |
 | Si el LLM falla | Explicación por reglas | El agente cae al modo reglas (`mode: rules_fallback`) y lo anota |
 
+```mermaid
+sequenceDiagram
+    participant A as Agente (risk)
+    participant P as LLMProvider.chat()
+    participant H as Herramientas (código)
+    participant M as market_data
+
+    A->>P: instrucciones + facts + esquema · tools=[compute_risk_metrics, request_history]
+    P-->>A: tool_calls: compute_risk_metrics
+    A->>H: handler()
+    H-->>A: {annualized_volatility, max_drawdown, bars_used: 92}
+    A->>P: tool result
+    P-->>A: tool_calls: request_history {days: 365}
+    A->>M: info_request (mensaje real, visible en la traza)
+    M-->>A: info_response {bars: 252}
+    A->>P: tool result
+    P-->>A: tool_calls: compute_risk_metrics
+    A->>H: handler()
+    H-->>A: métricas sobre 252 sesiones
+    A->>P: tool result
+    P-->>A: JSON final {risk_level, confidence, evidence, summary}
+    A->>A: validate_agent_output() + guardarraíl R1
+```
+
 En modo `llm`, la traza muestra cada turno del modelo (`llm_call_started/completed` con `step`), cada llamada a
 herramienta con argumentos y resultado (`tool_called`) y cada corrección (`guardrail_applied`). La tabla de decisiones
 indica "reglas: X" cuando el agente opinó distinto de lo que habrían dicho las reglas, y el inspector muestra la
@@ -62,9 +88,10 @@ en el evento `run_completed` y en `GET /api/runs/{id}/costs`.
 
 - **Sin broker, sin órdenes.** El único acceso externo es lectura de precios (yfinance) o un mock.
 - **Nunca se inventan datos.** Los indicadores se calculan con código determinista (`services/indicators.py`).
-  El LLM recibe esos hechos y **solo redacta**; la postura la fija la regla. `services/validation.py` comprueba
-  que cada número del resumen exista en los hechos y que las claves citadas existan; si no, la explicación se
-  descarta y se usa la generada por reglas (evento `validation_warning`).
+  En modo `rules` el LLM **solo redacta** (la postura la fija la regla); en modo `llm` el modelo razona, pero
+  los números le llegan exclusivamente por herramientas. `services/validation.py` comprueba que cada número de
+  un texto exista en los hechos, que las evidencias citen hechos reales y que los enumerados sean válidos; si no,
+  la salida se descarta o se corrige y queda anotado (`validation_warning`, `guardrail_applied`).
 - **Sin datos → `NO_ANALIZABLE`.** Nunca se rellena con estimaciones.
 - **Sin chain-of-thought.** Las salidas del LLM son JSON estructurado (`summary`, `facts_used`, `caveats`)
   obtenido con salida estructurada de la Claude API; no se pide ni se muestra razonamiento interno.
@@ -75,37 +102,133 @@ en el evento `run_completed` y en `GET /api/runs/{id}/costs`.
 
 ## 2. Arquitectura
 
+### Componentes
+
+```mermaid
+flowchart LR
+    subgraph UI["Frontend · Next.js (estático o dev)"]
+        F[AnalysisForm]
+        G["Vistas<br/>AgentGraph · EventLog · MessageInspector<br/>DecisionTable · CostPanel"]
+    end
+
+    subgraph API["Backend · FastAPI"]
+        O["Orchestrator<br/>run() · analyze_symbol() · deliver()"]
+        AG["Agentes (BaseAgent)<br/>market_data · technical · risk<br/>skeptic · decision"]
+        B["EventBus<br/>seq · store · broadcast"]
+        RS[("RunStore<br/>memoria + runs/*.json")]
+        WS[WebSocketManager]
+        LLM["LLMProvider<br/>mock · openrouter · anthropic"]
+        MKT["MarketDataProvider<br/>mock · yfinance"]
+    end
+
+    F -- "POST /api/runs" --> O
+    O <-- "AgentMessage<br/>(petición / respuesta)" --> AG
+    O -- "Event" --> B
+    AG -- "Event" --> B
+    B --> RS
+    B --> WS
+    WS -- "WS /ws/runs/{id}<br/>replay + live" --> G
+    AG -- "complete_json() / chat()" --> LLM
+    AG -- "fetch()" --> MKT
 ```
-┌──────────────┐   POST /api/runs    ┌──────────────────────────────────────────────────┐
-│   Next.js    │ ──────────────────▶ │ FastAPI                                          │
-│   frontend   │                     │  ┌────────────┐  deliver()  ┌─────────────────┐  │
-│              │ ◀────────────────── │  │Orchestrator│◀──────────▶│  Agents          │  │
-│  AgentGraph  │   WS /ws/runs/{id}  │  └─────┬──────┘            │ market_data      │  │
-│  EventLog    │   (replay + live)   │        │ emit()            │ technical  risk  │  │
-│  Inspector   │                     │  ┌─────▼──────┐            │ skeptic decision │  │
-│  Decisions   │                     │  │  EventBus  │──▶ RunStore└───────┬─────────┘  │
-└──────────────┘                     │  └─────┬──────┘                    │            │
-                                     │        ▼                  ┌────────▼────────┐   │
-                                     │  WebSocketManager         │ Providers       │   │
-                                     │                           │ LLM: mock|claude│   │
-                                     │                           │ Data: mock|yf   │   │
-                                     └───────────────────────────└─────────────────┘───┘
+
+### Topología de comunicación
+
+Todos los mensajes pasan por `Orchestrator.deliver()`, pero la topología lógica tiene tres formas: estrella
+(orquestador ↔ agente), paralelo (técnico ‖ riesgo) y **comunicación directa entre agentes** (líneas discontinuas).
+
+```mermaid
+flowchart LR
+    O((orchestrator))
+    MD[market_data]
+    TE[technical]
+    RI[risk]
+    SK[skeptic]
+    DE[decision]
+
+    O -- "task_request / task_result" --> MD
+    O -- "task_request / opinion" --> TE
+    O -- "task_request / opinion" --> RI
+    O -- "task_request / opinion / challenge" --> SK
+    O -- "task_request / decision" --> DE
+    RI -. "info_request / info_response" .-> MD
+    SK -. "challenge / opinion revisada" .-> TE
+
+    classDef hub fill:#EDEAF5,stroke:#5B4B8A,color:#1F1E1D
+    classDef data fill:#E6F0F5,stroke:#2F6F8F,color:#1F1E1D
+    classDef tech fill:#E7F2EC,stroke:#2E7D5B,color:#1F1E1D
+    classDef risk fill:#FBF1DC,stroke:#9A6700,color:#1F1E1D
+    classDef skep fill:#F7E8EC,stroke:#A8445C,color:#1F1E1D
+    classDef dec fill:#F7EAE3,stroke:#C2562E,color:#1F1E1D
+    class O hub
+    class MD data
+    class TE tech
+    class RI risk
+    class SK skep
+    class DE dec
 ```
 
 ### Flujo por símbolo
 
+Cada símbolo es una conversación independiente; hasta `MAX_PARALLEL_SYMBOLS` avanzan a la vez.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant O as orchestrator
+    participant M as market_data
+    participant T as technical
+    participant R as risk
+    participant S as skeptic
+    participant D as decision
+
+    O->>M: task_request {symbol, days: 130}
+    alt datos OK
+        M-->>O: task_result {data_ref, bars, last_close}
+    else símbolo desconocido / datos insuficientes / fallo
+        M-->>O: error {code, reason}
+        O->>D: task_request {error}
+        D-->>O: decision NO_ANALIZABLE (R0)
+    end
+
+    par análisis técnico
+        O->>T: task_request {data_ref}
+        T-->>O: opinion {stance, confidence, evidence}
+    and análisis de riesgo
+        O->>R: task_request {data_ref}
+        R->>M: info_request {days: 365, reason}
+        M-->>R: info_response {data_ref', bars: 252}
+        R-->>O: opinion {risk_level, confidence, evidence}
+    end
+
+    O->>S: task_request {technical, risk}
+    opt el escéptico discrepa
+        S->>T: challenge {counterarguments}
+        T-->>S: opinion revisada {maintains | concedes}
+        Note over S,T: evento disagreement
+    end
+    S-->>O: opinion | challenge {agrees, counterarguments, technical_response}
+
+    O->>D: task_request {technical, risk, skeptic}
+    D-->>O: decision {COMPRA | VENTA | ESPERAR, confidence, rationale}
+    Note over O: decision_made · symbol_completed
 ```
-orchestrator ──task_request──▶ market_data ──task_result──▶ orchestrator
-                                   (ERROR → decision → NO_ANALIZABLE)
-orchestrator ──task_request──▶ technical ─┐
-orchestrator ──task_request──▶ risk ──────┤ en paralelo
-      risk ──info_request──▶ market_data  │ (pide historial ampliado)
-      market_data ──info_response──▶ risk │
-technical/risk ──opinion──▶ orchestrator ─┘
-orchestrator ──task_request──▶ skeptic
-      skeptic ──challenge──▶ technical ──opinion(revisada)──▶ skeptic   (solo si discrepa)
-skeptic ──opinion|challenge──▶ orchestrator
-orchestrator ──task_request──▶ decision ──decision──▶ orchestrator
+
+### Del evento a la pantalla
+
+```mermaid
+flowchart LR
+    A["Agente / Orchestrator<br/>bus.emit(...)"] --> B["EventBus<br/>lock por ejecución → seq++"]
+    B --> C[("RunStore<br/>events[run_id]")]
+    B --> D["WebSocketManager<br/>broadcast(run_id)"]
+    C -- "al conectar: replay completo" --> D
+    D -- "JSON por evento" --> E["lib/websocket.ts<br/>mergeEvents (dedupe por seq)"]
+    E --> F["lib/trace.ts<br/>estado derivado: nodos, resultados, costes"]
+    F --> G[AgentGraph]
+    F --> H[EventLog]
+    F --> I[DecisionTable]
+    F --> J[CostPanel]
+    C -- "al completar: save()" --> K[("backend/runs/run_*.json")]
 ```
 
 ### Contrato de mensajes y eventos
@@ -115,7 +238,7 @@ Tipos: `task_request`, `task_result`, `info_request`, `info_response`, `opinion`
 
 `Event`: `seq` (monótono por ejecución), `type`, `symbol`, `agent`, `message?`, `data`.
 Tipos: `run_started/completed`, `symbol_started/completed`, `agent_started/completed/error`, `message_sent`,
-`llm_call_started/completed`, `validation_warning`, `disagreement`, `decision_made`.
+`llm_call_started/completed`, `tool_called`, `validation_warning`, `guardrail_applied`, `disagreement`, `decision_made`.
 
 ### Reglas de decisión (`agents/decision_agent.py`)
 
@@ -127,6 +250,34 @@ Tipos: `run_started/completed`, `symbol_started/completed`, `agent_started/compl
 | R3 | técnico NEUTRAL (o rebajado a neutral tras el reto) | `ESPERAR` |
 | R4 | técnico ALCISTA con riesgo ALTO | `ESPERAR` (veto de riesgo) |
 | R5 | el escéptico discrepa y la discrepancia no se resuelve | `ESPERAR` |
+
+```mermaid
+flowchart TD
+    S([opiniones]) --> Q0{"¿datos y opinión técnica?"}
+    Q0 -- no --> NA["NO_ANALIZABLE (R0)"]
+    Q0 -- sí --> Q1{"postura técnica efectiva"}
+    Q1 -- NEUTRAL --> W3["ESPERAR (R3)"]
+    Q1 -- ALCISTA --> Q2{"¿riesgo ALTO?"}
+    Q2 -- sí --> W4["ESPERAR (R4 · veto de riesgo)"]
+    Q2 -- no --> Q3{"¿escéptico de acuerdo?"}
+    Q3 -- sí --> BUY["COMPRA (R1)"]
+    Q3 -- no --> W5["ESPERAR (R5)"]
+    Q1 -- BAJISTA --> Q4{"¿escéptico de acuerdo?"}
+    Q4 -- sí --> SELL["VENTA (R2)"]
+    Q4 -- no --> W5
+
+    classDef buy fill:#E7F2EC,stroke:#2E7D5B,color:#1F1E1D
+    classDef sell fill:#F9E8E5,stroke:#B3362B,color:#1F1E1D
+    classDef wait fill:#FBF1DC,stroke:#9A6700,color:#1F1E1D
+    classDef na fill:#F4F2EC,stroke:#8C887F,color:#1F1E1D
+    class BUY buy
+    class SELL sell
+    class W3,W4,W5 wait
+    class NA na
+```
+
+En modo `llm` el mismo árbol no decide: actúa como **referencia** (`rule_reference`) y como guardarraíl
+(G1 ≈ R4, G2 ≈ coherencia con la postura, G3 ≈ R5 acotando la confianza).
 
 Postura técnica: puntuación −4..+4 a partir de cierre vs SMA50, SMA20 vs SMA50, RSI(14) y histograma MACD.
 Riesgo: volatilidad anualizada, drawdown máximo y ATR(14) sobre ≥200 sesiones.
@@ -161,6 +312,20 @@ start-local.bat / .sh       arranque "un solo proceso" (solo Python) en la máqu
 ---
 
 ## 4. Puesta en marcha
+
+```mermaid
+flowchart LR
+    subgraph A["Opción A · Docker"]
+        A1[frontend :3000<br/>Node standalone] --> A2[backend :8000<br/>FastAPI]
+    end
+    subgraph B["Opción B · Local con Node (desarrollo)"]
+        B1["npm run dev :3000"] --> B2["uvicorn :8000"]
+    end
+    subgraph C["Opción C · Un solo proceso (solo Python)"]
+        C1["FastAPI :8000<br/>sirve frontend/out + API + WS"]
+    end
+    D["Máquina con Node:<br/>npm run build:static → frontend/out"] -. "copiar repo" .-> C1
+```
 
 ### Opción A — Docker (todo en modo mock, sin claves)
 
@@ -212,8 +377,9 @@ pip download -r requirements.txt -d wheels   # misma versión de Python y mismo 
 ```
 
 **3. Copiar el repositorio al destino** (incluyendo `frontend/out/` y, si procede, `backend/wheels/`;
-no hace falta `node_modules` ni `.next`). Por zip, carpeta compartida o git (`frontend/out/` no está ignorado
-a propósito; `backend/wheels/` sí, por tamaño: cópialo a mano).
+no hace falta `node_modules` ni `.next`). Por zip, carpeta compartida o git. Si usas git, **haz commit de
+`frontend/out/`** después de cada `build:static` (está versionado a propósito; `backend/wheels/` no, por tamaño:
+cópialo a mano). Comprueba en el destino que existe `frontend/out/index.html`.
 
 **4. En el destino:**
 
@@ -232,7 +398,9 @@ uvicorn app.main:app --port 8000
 ```
 
 Notas:
-- Si `frontend/out/index.html` no existe, el backend arranca igualmente y lo avisa en el log (solo API).
+- Si `frontend/out/index.html` no existe, el backend arranca igualmente, lo avisa en el log y muestra en `/` una
+  página de ayuda con la ruta en la que buscó el build (solo API). Causas típicas: no se hizo commit/copia de
+  `frontend/out/` tras `build:static`, o se copió solo la carpeta `backend/` (en ese caso define `FRONTEND_DIST`).
 - `FRONTEND_DIST` permite apuntar a otra carpeta con el build estático.
 - Para Python sin instalador (sin permisos): el *Windows embeddable package* de python.org funciona, pero no trae
   `pip` ni `venv`; en ese caso instala con `python get-pip.py --user` y ejecuta `python -m uvicorn ...` directamente.
@@ -296,8 +464,9 @@ son reproducibles en clase:
 | `NODATA` | NO_ANALIZABLE | Serie con muy pocas sesiones → `insufficient_data` |
 | `FAIL` | NO_ANALIZABLE | Fallo simulado del proveedor → `provider_error` |
 
-Presets del formulario: **Big tech** (`AAPL, MSFT, NVDA, AMZN, META`), **Con discrepancias** (`META, TSLA, INTC`)
-y **Con errores** (`AAPL, XYZ123, NODATA, FAIL`). Una ejecución puede reabrirse con `http://localhost:3000/?run=<run_id>`.
+Presets del formulario (válidos con `mock` y con `yfinance`): **Cartera big tech** (`AAPL, MSFT, NVDA, AMZN, META`) y
+**Discrepancias y errores** (`TSLA, META, XYZ123`: riesgo alto con reto del escéptico, técnico que concede y símbolo
+inexistente). Una ejecución puede reabrirse con `http://localhost:3000/?run=<run_id>`.
 
 Símbolos conocidos por el mock: AAPL, AMD, AMZN, GOOGL, IBE.MC, INTC, JPM, KO, META, MSFT, NFLX, NVDA, SAN.MC, SPY, TSLA, XOM.
 

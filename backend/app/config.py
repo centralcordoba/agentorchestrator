@@ -101,9 +101,9 @@ class Settings:
 
     # Carpeta con el frontend exportado (npm run build:static). Si existe, FastAPI la sirve en "/".
     frontend_dist: str = field(
-        default_factory=lambda: os.getenv(
-            "FRONTEND_DIST",
-            os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "out"),
+        default_factory=lambda: (
+            os.getenv("FRONTEND_DIST", "").strip()
+            or os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "frontend", "out")
         )
     )
 

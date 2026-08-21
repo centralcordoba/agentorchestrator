@@ -232,4 +232,30 @@ if os.path.isdir(settings.frontend_dist) and os.path.isfile(os.path.join(setting
     app.mount("/", StaticFiles(directory=settings.frontend_dist, html=True), name="frontend")
     log.info("Sirviendo frontend estático desde %s", settings.frontend_dist)
 else:
-    log.info("Sin frontend estático en %s (usa `npm run dev` o `build:static`).", settings.frontend_dist)
+    log.warning(
+        "Frontend estático NO encontrado en %s. Solo se sirve la API. "
+        "Genera el build en una máquina con Node (cd frontend && npm run build:static) y copia frontend/out, "
+        "o apunta FRONTEND_DIST a la carpeta correcta.",
+        settings.frontend_dist,
+    )
+
+    from fastapi.responses import HTMLResponse
+
+    @app.get("/", include_in_schema=False)
+    async def frontend_missing() -> HTMLResponse:
+        """Página de ayuda cuando falta el build estático (evita un 404 desconcertante)."""
+        html = f"""<!doctype html><html lang="es"><head><meta charset="utf-8"><title>Frontend no encontrado</title>
+<style>body{{font-family:system-ui,sans-serif;max-width:720px;margin:48px auto;padding:0 20px;color:#1f1e1d;background:#faf9f5;line-height:1.5}}
+code,pre{{background:#f4f2ec;border:1px solid #e7e4db;border-radius:6px;padding:2px 6px}}pre{{padding:12px;overflow:auto}}h1{{font-size:22px}}</style></head>
+<body><h1>La API funciona, pero falta el frontend estático</h1>
+<p>El backend buscó <code>index.html</code> en:</p><pre>{settings.frontend_dist}</pre>
+<p>y no lo encontró. Opciones:</p>
+<ol>
+<li>En una máquina con Node: <pre>cd frontend
+npm install
+npm run build:static</pre> y copia la carpeta <code>frontend/out/</code> al mismo sitio en esta máquina (si usas git, asegúrate de que está versionada: no debe aparecer en <code>.gitignore</code>).</li>
+<li>O define la variable <code>FRONTEND_DIST</code> con la ruta donde esté el build.</li>
+</ol>
+<p>Mientras tanto puedes usar la API: <a href="/docs">/docs</a> · <a href="/api/health">/api/health</a> · <a href="/api/config">/api/config</a></p>
+</body></html>"""
+        return HTMLResponse(html, status_code=200)

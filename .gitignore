@@ -16,7 +16,7 @@ backend/runs/
 # Node / Next.js
 node_modules/
 .next/
-out/
+# (frontend/out/ se versiona a propósito: es el build estático que sirve FastAPI en la máquina de destino)
 frontend/.env
 frontend/.env.local
 *.tsbuildinfo

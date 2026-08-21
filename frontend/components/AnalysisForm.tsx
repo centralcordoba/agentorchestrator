@@ -3,10 +3,18 @@
 import { useEffect, useState } from "react";
 import { AGENT_MODE_LABELS, PACE_OPTIONS, type AgentMode } from "@/lib/types";
 
+// Presets válidos tanto con datos simulados como reales (Yahoo Finance).
 const PRESETS: { label: string; symbols: string[]; hint: string }[] = [
-  { label: "Big tech", symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META"], hint: "Flujo completo con 5 símbolos en paralelo" },
-  { label: "Con discrepancias", symbols: ["META", "TSLA", "INTC"], hint: "El escéptico reta al analista técnico" },
-  { label: "Con errores", symbols: ["AAPL", "XYZ123", "NODATA", "FAIL"], hint: "Símbolo desconocido, datos insuficientes y fallo del proveedor" },
+  {
+    label: "Cartera big tech",
+    symbols: ["AAPL", "MSFT", "NVDA", "AMZN", "META"],
+    hint: "Flujo completo: cinco símbolos analizados en paralelo",
+  },
+  {
+    label: "Discrepancias y errores",
+    symbols: ["TSLA", "META", "XYZ123"],
+    hint: "TSLA: riesgo alto y reto del escéptico · META: el técnico concede · XYZ123: símbolo inexistente → NO_ANALIZABLE",
+  },
 ];
 
 interface Props {
