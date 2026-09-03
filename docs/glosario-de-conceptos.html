@@ -1,0 +1,684 @@
+<title>Glosario del Orquestador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:      #EFF1F0;
+    --sheet:      #FFFFFF;
+    --card:       #F8FAF9;
+    --ink:        #14201F;
+    --ink-soft:   #3B4C4A;
+    --muted:      #62716F;
+    --line:       #DCE3E1;
+    --line-soft:  #EBEFEE;
+    --accent:     #0E6E66;
+    --accent-dim: #E2EFED;
+    --code-bg:    #F2F5F4;
+
+    --fam-a: #45688C;
+    --fam-b: #6E4B8F;
+    --fam-c: #B4453A;
+    --fam-d: #9A6516;
+
+    --shadow: 0 1px 2px rgba(20,32,31,.05), 0 8px 28px rgba(20,32,31,.07);
+    --step:  clamp(.95rem, .3vw + .88rem, 1.02rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0B1211;
+      --sheet:      #141D1C;
+      --card:       #192322;
+      --ink:        #E6ECEA;
+      --ink-soft:   #C0CCC9;
+      --muted:      #8E9D9A;
+      --line:       #26332F;
+      --line-soft:  #1D2827;
+      --accent:     #58B6A9;
+      --accent-dim: #16302D;
+      --code-bg:    #1B2625;
+
+      --fam-a: #7FA6CE;
+      --fam-b: #AE8FD0;
+      --fam-c: #E0796C;
+      --fam-d: #D3A63F;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0B1211;
+    --sheet:      #141D1C;
+    --card:       #192322;
+    --ink:        #E6ECEA;
+    --ink-soft:   #C0CCC9;
+    --muted:      #8E9D9A;
+    --line:       #26332F;
+    --line-soft:  #1D2827;
+    --accent:     #58B6A9;
+    --accent-dim: #16302D;
+    --code-bg:    #1B2625;
+
+    --fam-a: #7FA6CE;
+    --fam-b: #AE8FD0;
+    --fam-c: #E0796C;
+    --fam-d: #D3A63F;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: var(--step);
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 66rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 3vw, 2.75rem) clamp(.85rem, 3vw, 2rem) 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.25rem, 2.5vw, 2rem);
+  }
+
+  /* ------------------------------------------------------------- cabecera */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .masthead h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    line-height: 1.12;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .masthead p { margin: 0; color: var(--ink-soft); max-width: 48rem; font-size: 1.02rem; }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ---------------------------------------------------------------- guía */
+  .howto {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.6rem;
+    font-size: .88rem;
+    color: var(--muted);
+    padding-top: .3rem;
+  }
+  .howto span { display: flex; align-items: baseline; gap: .4rem; }
+  .swatch { width: .5rem; height: .5rem; border-radius: 50%; background: var(--c); flex: none; }
+
+  /* --------------------------------------------------------------- bloque */
+  .family {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+    padding: clamp(1.25rem, 3vw, 2.4rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1.15rem;
+  }
+  .family-head {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    padding-bottom: .7rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .family-tag {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--sheet);
+    background: var(--fam);
+    padding: .22rem .5rem;
+    border-radius: 2px;
+    flex: none;
+  }
+  .family-head h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: clamp(1.2rem, 2.4vw, 1.55rem);
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+  .family-head p {
+    margin: 0;
+    font-size: .88rem;
+    color: var(--muted);
+    flex: 1 1 14rem;
+    min-width: 0;
+  }
+  @media (max-width: 44rem) {
+    .family-head { flex-wrap: wrap; }
+    .family-head p { flex-basis: 100%; }
+  }
+
+  /* --------------------------------------------------------------- fichas */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(19.5rem, 1fr));
+    gap: .85rem;
+  }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line-soft);
+    border-left: 2px solid var(--fam);
+    border-radius: 0 2px 2px 0;
+    padding: .85rem 1rem .8rem;
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+  }
+  .card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .35rem .6rem; }
+  .card h3 {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+    font-size: .98rem;
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -.005em;
+    color: var(--ink);
+  }
+  .alias {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .7rem;
+    color: var(--muted);
+    letter-spacing: .02em;
+  }
+  .card p { margin: 0; font-size: .93rem; color: var(--ink-soft); }
+  .card .here {
+    font-size: .93rem;
+    color: var(--ink);
+    border-top: 1px solid var(--line-soft);
+    padding-top: .4rem;
+  }
+  .here b {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    color: var(--fam);
+    font-weight: 600;
+    margin-right: .35rem;
+  }
+  .where {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .735rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .where b { color: var(--accent); font-weight: 500; }
+
+  code {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .855em;
+    background: var(--code-bg);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: .05em .3em;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+  .where code { background: none; border: none; padding: 0; color: inherit; white-space: normal; }
+
+  /* --------------------------------------------------------------- cierre */
+  .closing {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+    padding: clamp(1.25rem, 3vw, 2.4rem);
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+  }
+  .closing h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+  }
+  .closing p { margin: 0; max-width: 68ch; color: var(--ink-soft); }
+  .chain {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem .5rem;
+    align-items: center;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .78rem;
+    padding: .8rem 0 .2rem;
+  }
+  .chain i { font-style: normal; color: var(--muted); }
+  .chain em {
+    font-style: normal;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+    padding: .2rem .5rem;
+    border-radius: 2px;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .colophon {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    color: var(--muted);
+    text-align: center;
+    padding-top: .5rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .wrap { max-width: none; padding: 0; gap: 1rem; }
+    .family, .closing { box-shadow: none; border: none; padding: 0 0 .6rem; break-inside: avoid; }
+    .card { break-inside: avoid; }
+    .colophon { display: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="kicker">Onboarding · agentorchestrator</span>
+    <h1>Glosario del orquestador</h1>
+    <p>Los conceptos de IA que hay detrás de la aplicación, cada uno explicado en dos frases y anclado a la
+      línea de código donde vive. Pensado para leerse de un tirón o para consultarse suelto.</p>
+    <div class="howto">
+      <span><i class="swatch" style="--c: var(--fam-a)"></i>A · Hablar con el modelo</span>
+      <span><i class="swatch" style="--c: var(--fam-b)"></i>B · Convertirlo en agente</span>
+      <span><i class="swatch" style="--c: var(--fam-c)"></i>C · Que no mienta</span>
+      <span><i class="swatch" style="--c: var(--fam-d)"></i>D · Operarlo</span>
+    </div>
+  </header>
+
+  <!-- ========================================================== FAMILIA A -->
+  <section class="family" style="--fam: var(--fam-a)">
+    <div class="family-head">
+      <span class="family-tag">A</span>
+      <h2>Hablar con el modelo</h2>
+      <p>Lo mínimo para pedirle algo a un LLM y recibir algo utilizable por un programa.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><h3>Modelo de lenguaje</h3><span class="alias">LLM</span></div>
+        <p>Un programa que recibe texto y devuelve texto. No sabe nada del mundo que no le hayas contado en
+          esa misma petición, y no recuerda la conversación anterior.</p>
+        <p class="here"><b>Aquí</b>Nunca se le pide un precio ni un cálculo: solo que redacte o que decida
+          sobre datos que ya ha calculado el código.</p>
+        <p class="where"><b>providers/llm_provider.py:128</b> <code>class LLMProvider</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Abstracción de proveedor</h3><span class="alias">provider abstraction</span></div>
+        <p>Una interfaz común para que el resto del código no sepa qué modelo hay detrás. Cambiar de
+          proveedor es cambiar una variable de entorno, no reescribir agentes.</p>
+        <p class="here"><b>Aquí</b>Tres implementaciones: Claude, OpenRouter y un simulador local. Se elige
+          con <code>LLM_PROVIDER</code>.</p>
+        <p class="where"><b>providers/anthropic_provider.py</b>, <code>openrouter_provider.py</code>,
+          <code>mock_llm_provider.py</code> · fábrica en <b>main.py:45</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Prompt de sistema</h3><span class="alias">system prompt</span></div>
+        <p>Las instrucciones permanentes que definen el papel del modelo y sus límites, separadas de la
+          pregunta concreta de cada turno. Es donde se escriben las reglas que no deben negociarse.</p>
+        <p class="here"><b>Aquí</b>Hay dos, uno por modo, y ambos empiezan por lo mismo: «no inventes precios,
+          indicadores, fechas ni fuentes».</p>
+        <p class="where"><b>providers/llm_provider.py:59</b> <code>SYSTEM_PROMPT</code> · <b>:73</b>
+          <code>AGENT_SYSTEM_PROMPT</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Prompt por capas</h3><span class="alias">layered prompting</span></div>
+        <p>El mensaje de usuario no es una frase suelta: se ensambla con partes de origen distinto —tarea,
+          instrucciones del agente, hechos, esquema de respuesta— y cada capa se puede auditar aparte.</p>
+        <p class="here"><b>Aquí</b>Los datos van dentro de un bloque <code>&lt;facts&gt;</code> delimitado, para
+          que quede claro qué es dato y qué es instrucción.</p>
+        <p class="where"><b>providers/llm_provider.py:209</b> <code>render_agent_prompt()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Salida estructurada</h3><span class="alias">structured output · JSON Schema</span></div>
+        <p>En lugar de prosa libre, se le exige al modelo un objeto JSON con campos y tipos fijos. Así otro
+          programa puede leer la respuesta sin adivinar.</p>
+        <p class="here"><b>Aquí</b>Cada agente declara su esquema —postura, confianza, evidencia, resumen—, y
+          con Claude se impone en la propia llamada a la API.</p>
+        <p class="where"><b>llm_provider.py:37</b> <code>EXPLANATION_SCHEMA</code> ·
+          <b>technical_agent.py:41</b> <code>TECH_SCHEMA</code> · <b>anthropic_provider.py:111</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Ventana de contexto</h3><span class="alias">context window</span></div>
+        <p>Todo lo que el modelo puede «ver» en una llamada: el sistema, el historial de mensajes y los
+          resultados de herramientas. Fuera de ahí, para él no existe.</p>
+        <p class="here"><b>Aquí</b>Cada agente construye su propia lista de mensajes desde cero y la tira al
+          acabar. No hay un contexto global compartido entre agentes.</p>
+        <p class="where"><b>providers/llm_provider.py:108</b> <code>ChatMessage</code> ·
+          <b>base_agent.py:269</b> lista <code>messages</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Tokens</h3><span class="alias">tokens</span></div>
+        <p>Los trozos en que el modelo parte el texto, y la unidad en que se factura: tantos de entrada,
+          tantos de salida, a un precio distinto cada uno.</p>
+        <p class="here"><b>Aquí</b>Cada respuesta trae su recuento; si el proveedor no informa del coste, se
+          estima con una tabla de tarifas por millón de tokens.</p>
+        <p class="where"><b>llm_provider.py:172</b> <code>with_cost()</code> ·
+          <b>anthropic_provider.py:32</b> <code>ANTHROPIC_PRICES</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Esfuerzo y límite de salida</h3><span class="alias">effort · max_tokens</span></div>
+        <p>Dos mandos: cuánto debe pensar el modelo antes de responder, y cuánto texto se le permite generar.
+          Ambos cambian el coste y la latencia.</p>
+        <p class="here"><b>Aquí</b>Esfuerzo bajo por defecto —las tareas son cortas—, y si una respuesta se
+          trunca por el límite se trata como fallo, no como respuesta válida.</p>
+        <p class="where"><b>config.py:48</b> <code>anthropic_effort</code> ·
+          <b>anthropic_provider.py:86</b> <code>_check_stop()</code></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== FAMILIA B -->
+  <section class="family" style="--fam: var(--fam-b)">
+    <div class="family-head">
+      <span class="family-tag">B</span>
+      <h2>Convertir un modelo en un agente</h2>
+      <p>Lo que separa «pedirle un texto a un LLM» de «tener un agente que trabaja con otros».</p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><h3>Herramientas</h3><span class="alias">tool calling · function calling</span></div>
+        <p>Funciones normales de código que se le describen al modelo. Él no las ejecuta: responde «llama a
+          esta con estos argumentos», y el programa decide si lo hace.</p>
+        <p class="here"><b>Aquí</b>Cuatro en total: calcular indicadores, calcular métricas de riesgo, pedir
+          más historial y retar al analista técnico.</p>
+        <p class="where"><b>llm_provider.py:94</b> <code>ToolSpec</code> (qué ve el modelo) ·
+          <b>base_agent.py:57</b> <code>Tool</code> (qué se ejecuta)</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Bucle agéntico</h3><span class="alias">agent loop</span></div>
+        <p>Pedir → el modelo llama a una herramienta → ejecutarla → devolverle el resultado → repetir, hasta
+          que entrega su respuesta final. Ese ciclo es lo que hace «agente» a un LLM.</p>
+        <p class="here"><b>Aquí</b>Con tope de ocho vueltas. Si el modelo no cierra, se considera fallo y el
+          agente cae a las reglas.</p>
+        <p class="where"><b>base_agent.py:250</b> <code>run_agent_loop()</code> ·
+          <b>config.py:79</b> <code>agent_max_steps</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Sistema multiagente</h3><span class="alias">multi-agent system</span></div>
+        <p>Varios agentes con una especialidad estrecha cada uno, en lugar de un único modelo al que se le
+          pide todo. Más fácil de auditar, y cada pieza se puede mejorar por separado.</p>
+        <p class="here"><b>Aquí</b>Cinco analistas y un coordinador, cada uno en su archivo, con una
+          responsabilidad que no se solapa con las demás.</p>
+        <p class="where"><b>orchestrator.py:74</b> registro de agentes · <b>backend/app/agents/</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Paso de mensajes tipado</h3><span class="alias">typed message passing</span></div>
+        <p>Los agentes no se llaman como funciones: se mandan mensajes con un tipo declarado —petición,
+          resultado, opinión, reto, error—. El tipo dice qué se espera de vuelta.</p>
+        <p class="here"><b>Aquí</b>Ocho tipos, y todo mensaje pasa por un único punto de entrega que lo
+          publica antes de encaminarlo. Nada viaja sin dejar rastro.</p>
+        <p class="where"><b>models.py:49</b> <code>MessageType</code> ·
+          <b>orchestrator.py:84</b> <code>deliver()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Orquestación centralizada</h3><span class="alias">central orchestration</span></div>
+        <p>Un coordinador conoce el orden del proceso; los agentes solo conocen su tarea. Evita que todos
+          tengan que saber de todos.</p>
+        <p class="here"><b>Aquí</b>El orquestador fija la secuencia y lanza technical y risk en paralelo,
+          pero no opina sobre el contenido.</p>
+        <p class="where"><b>orchestrator.py:168</b> <code>analyze_symbol()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Comunicación directa</h3><span class="alias">peer-to-peer</span></div>
+        <p>Un agente puede dirigirse a otro sin pasar por el coordinador, cuando descubre que necesita algo
+          que no estaba en el guion.</p>
+        <p class="here"><b>Aquí</b>Dos casos: risk pidiendo más historial a market_data, y skeptic retando a
+          technical. Ambos aparecen en la traza como mensajes normales.</p>
+        <p class="where"><b>risk_agent.py:124</b> <code>_request_history()</code> ·
+          <b>skeptic_agent.py:100</b> <code>_challenge()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Paso por referencia</h3><span class="alias">shared context</span></div>
+        <p>Los datos voluminosos no se copian dentro de los mensajes: se guardan una vez y los mensajes
+          llevan solo una etiqueta que apunta a ellos.</p>
+        <p class="here"><b>Aquí</b>La serie de precios vive en un diccionario compartido y viaja como
+          <code>data_ref</code>, así que la traza sigue siendo legible.</p>
+        <p class="where"><b>base_agent.py:43</b> <code>AgentContext.data</code> ·
+          <b>market_data_agent.py:46</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Debate y crítica</h3><span class="alias">adversarial review</span></div>
+        <p>Un agente cuyo trabajo es contradecir a los demás, no repetir su análisis. Encontrar el fallo es
+          más barato que evitarlo, y deja constancia de por qué la conclusión se sostiene.</p>
+        <p class="here"><b>Aquí</b>skeptic busca incoherencias concretas y reta; technical responde
+          «mantengo» o «concedo», y decision usa la postura <em>revisada</em>.</p>
+        <p class="where"><b>skeptic_agent.py:59</b> <code>find_counterarguments()</code> ·
+          <b>decision_agent.py:57</b> <code>effective_technical()</code></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== FAMILIA C -->
+  <section class="family" style="--fam: var(--fam-c)">
+    <div class="family-head">
+      <span class="family-tag">C</span>
+      <h2>Conseguir que no mienta</h2>
+      <p>El grupo de conceptos más importante de la aplicación: un LLM produce texto plausible, y plausible
+        no es lo mismo que cierto.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><h3>Alucinación</h3><span class="alias">hallucination</span></div>
+        <p>Cuando el modelo afirma algo con total naturalidad y resulta ser falso: un precio inventado, un
+          indicador que nunca se calculó, un porcentaje que suena bien. No es un error del sistema, es cómo
+          funciona por diseño.</p>
+        <p class="here"><b>Aquí</b>Se asume que va a pasar. Todo el resto de esta familia existe para
+          detectarlo antes de que llegue a la pantalla.</p>
+        <p class="where"><b>services/validation.py</b> · docstring del módulo</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Anclaje a hechos</h3><span class="alias">grounding</span></div>
+        <p>Obligar al modelo a apoyarse solo en datos que se le han dado, y <em>comprobarlo después</em>. Sin
+          esa comprobación, «no inventes nada» es solo una recomendación.</p>
+        <p class="here"><b>Aquí</b>Se extrae cada número del texto generado y se busca entre los hechos
+          conocidos —admitiendo redondeos, la versión en porcentaje y periodos como 14, 20 o 50—. El que no
+          aparece se marca.</p>
+        <p class="where"><b>validation.py:78</b> <code>ungrounded_numbers()</code> ·
+          <b>:62</b> <code>_number_is_grounded()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Hechos conocidos</h3><span class="alias">known facts</span></div>
+        <p>El universo contra el que se valida: los datos iniciales más todo lo que han devuelto las
+          herramientas durante el bucle. Si el modelo obtuvo un dato, ese dato ya cuenta.</p>
+        <p class="here"><b>Aquí</b>Se acumula vuelta a vuelta, y solo se añaden los resultados de
+          herramientas que no fallaron.</p>
+        <p class="where"><b>base_agent.py:270</b> diccionario <code>known</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Citación de evidencia</h3><span class="alias">evidence citation</span></div>
+        <p>No basta con la conclusión: el modelo debe listar en qué hecho concreto se apoya cada parte de su
+          razonamiento, con el nombre exacto del dato.</p>
+        <p class="here"><b>Aquí</b>Cada evidencia se comprueba contra los hechos conocidos; las que citan un
+          hecho inexistente se descartan y quedan como aviso.</p>
+        <p class="where"><b>validation.py:182</b> bloque <code>evidence</code> ·
+          <b>models.py</b> <code>Evidence</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Guardarraíles</h3><span class="alias">guardrails</span></div>
+        <p>Reglas deterministas que revisan la salida del modelo y la corrigen cuando cruza una línea. No
+          mejoran el razonamiento: acotan el daño de un razonamiento malo.</p>
+        <p class="here"><b>Aquí</b>Siete, con nombre propio. Por ejemplo, nunca se emite COMPRA sobre un
+          activo de riesgo ALTO, diga lo que diga el modelo. Cada corrección se emite como evento visible.</p>
+        <p class="where"><b>base_agent.py:179</b> <code>guardrail()</code> ·
+          <b>decision_agent.py:204</b> reglas G1–G4</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Referencia determinista</h3><span class="alias">deterministic baseline</span></div>
+        <p>Mantener una versión del cálculo hecha solo con reglas, aunque decida el modelo. Sirve de patrón
+          de comparación y de red de rescate.</p>
+        <p class="here"><b>Aquí</b>Si el modelo se aparta de la referencia sin evidencia suficiente, se
+          corrige hacia ella; y la referencia se guarda junto a la opinión para poder comparar.</p>
+        <p class="where"><b>technical_agent.py:92</b> <code>rule_stance()</code> ·
+          <b>risk_agent.py:77</b> <code>rule_risk_level()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Degradación elegante</h3><span class="alias">graceful degradation</span></div>
+        <p>Que el fallo del componente menos fiable no tumbe el sistema: se pierde calidad, no servicio, y el
+          usuario se entera de que se ha degradado.</p>
+        <p class="here"><b>Aquí</b>Sin clave, sin red o con una respuesta inválida, cada agente cae al modo
+          reglas y anota el motivo en su propia explicación.</p>
+        <p class="where"><b>technical_agent.py:168</b> <code>except LLMError</code> ·
+          <b>base_agent.py:212</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Confianza acotada</h3><span class="alias">calibrated confidence</span></div>
+        <p>Un número de 0 a 1 que acompaña a cada opinión. Solo sirve si alguien comprueba que es coherente
+          con la evidencia; si no, es decoración.</p>
+        <p class="here"><b>Aquí</b>Se valida el rango, y se recorta cuando la evidencia no la sostiene:
+          conceder un reto obliga a bajarla, y una discrepancia sin resolver la limita a 0,5.</p>
+        <p class="where"><b>validation.py:170</b> acotado · <b>decision_agent.py:210</b> regla G3</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ========================================================== FAMILIA D -->
+  <section class="family" style="--fam: var(--fam-d)">
+    <div class="family-head">
+      <span class="family-tag">D</span>
+      <h2>Operar el sistema</h2>
+      <p>Lo que hace falta para que esto sea depurable, reproducible y no se dispare en coste.</p>
+    </div>
+
+    <div class="cards">
+      <div class="card">
+        <div class="card-head"><h3>Observabilidad</h3><span class="alias">tracing</span></div>
+        <p>Emitir un registro de todo lo que ocurre por dentro —quién empezó, qué se envió, qué corrigió una
+          regla— en lugar de mostrar solo el resultado.</p>
+        <p class="here"><b>Aquí</b>Quince tipos de evento numerados en orden, incluidos los incómodos:
+          discrepancias, avisos de validación y guardarraíles aplicados.</p>
+        <p class="where"><b>models.py:60</b> <code>EventType</code> ·
+          <b>events.py:26</b> <code>EventBus.emit()</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Reproducibilidad</h3><span class="alias">event sourcing · replay</span></div>
+        <p>Si guardas la secuencia completa de eventos, puedes reconstruir cualquier ejecución pasada tal como
+          sucedió, sin volver a llamar al modelo.</p>
+        <p class="here"><b>Aquí</b>Cada ejecución se escribe en un JSON, y al abrir el WebSocket el servidor
+          reenvía primero todo el historial y luego sigue en vivo.</p>
+        <p class="where"><b>services/run_store.py:54</b> <code>save()</code> ·
+          <b>main.py:208</b> WebSocket con replay</p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Control de concurrencia</h3><span class="alias">throttling · rate limits</span></div>
+        <p>Un proveedor de LLM tiene cuotas por minuto. Sin un tope propio, cinco símbolos en paralelo lanzan
+          diez peticiones simultáneas y empiezan los errores.</p>
+        <p class="here"><b>Aquí</b>Dos límites: tres símbolos a la vez y cuatro llamadas simultáneas al
+          modelo, esta última envolviendo al proveedor sin que los agentes se enteren.</p>
+        <p class="where"><b>llm_provider.py:149</b> <code>ThrottledLLMProvider</code> ·
+          <b>config.py:89</b> <code>max_parallel_symbols</code></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Simulador determinista</h3><span class="alias">mock provider</span></div>
+        <p>Una implementación falsa del proveedor que produce siempre lo mismo. Permite desarrollar y
+          demostrar sin claves, sin red y sin gastar.</p>
+        <p class="here"><b>Aquí</b>El simulador imita también el bucle de herramientas, así que la forma de la
+          traza es idéntica a la de un modelo real.</p>
+        <p class="where"><b>providers/mock_llm_provider.py:32</b> ·
+          <b>mock_market_data_provider.py:53</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Contabilidad de coste</h3><span class="alias">cost accounting</span></div>
+        <p>Atribuir el gasto a quién lo generó. En un sistema multiagente el coste se dispara sin avisar:
+          cada vuelta del bucle es una llamada más.</p>
+        <p class="here"><b>Aquí</b>Se agrega por agente a partir de los eventos y se muestra en vivo, con una
+          etiqueta que dice si el coste es informado, estimado o desconocido.</p>
+        <p class="where"><b>services/costs.py:31</b> <code>summarize_costs()</code> ·
+          <b>frontend/components/CostPanel.tsx</b></p>
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h3>Fallos del proveedor</h3><span class="alias">refusals · truncation</span></div>
+        <p>Una llamada a un LLM no falla solo por la red: puede agotarse la cuota, el modelo puede rechazar la
+          petición, o la respuesta puede cortarse a mitad.</p>
+        <p class="here"><b>Aquí</b>Cada caso se traduce a un error propio con mensaje legible, y un rechazo o
+          un truncado se tratan como fallo —nunca como respuesta parcial válida.</p>
+        <p class="where"><b>anthropic_provider.py:65</b> <code>_create()</code> ·
+          <b>:86</b> <code>_check_stop()</code></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================= CIERRE -->
+  <section class="closing">
+    <h2>La cadena completa, de una ojeada</h2>
+    <p>Casi todos los conceptos anteriores encajan en una sola secuencia. Cada eslabón puede fallar, y para
+      cada uno hay una respuesta prevista que no es «devolver algo inventado».</p>
+    <div class="chain">
+      <em>hechos</em><i>→</i><em>prompt + esquema</em><i>→</i><em>modelo</em><i>→</i><em>herramienta</em>
+      <i>→ (repetir) →</i><em>JSON final</em><i>→</i><em>validación</em><i>→</i><em>guardarraíl</em>
+      <i>→</i><em>evento</em><i>→</i><em>pantalla</em>
+    </div>
+    <p>Si algo se rompe en cualquier punto, el agente cae al modo reglas, deja el motivo por escrito y la
+      ejecución termina igualmente con un resultado por símbolo.</p>
+    <p style="font-size:.92rem;color:var(--muted);padding-top:.3rem">Documentos hermanos en
+      <code>docs/</code>: <b>como-funciona-en-3-hojas.html</b> recorre la aplicación de punta a punta, y
+      <b>conceptos-ai-llm-y-preguntas.html</b> desarrolla estos mismos conceptos en versión larga, con
+      ejemplos de prompts reales y preguntas frecuentes.</p>
+  </section>
+
+  <p class="colophon">agentorchestrator · glosario de conceptos · 30 fichas</p>
+</div>

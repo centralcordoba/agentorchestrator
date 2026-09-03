@@ -1,0 +1,918 @@
+<title>Comité de Agentes en 3 Hojas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;0,600;1,400&display=swap">
+
+<style>
+  :root {
+    --paper:      #EFF1F0;
+    --sheet:      #FFFFFF;
+    --ink:        #14201F;
+    --ink-soft:   #3B4C4A;
+    --muted:      #62716F;
+    --line:       #DCE3E1;
+    --line-soft:  #EBEFEE;
+    --accent:     #0E6E66;
+    --accent-dim: #E2EFED;
+    --code-bg:    #F2F5F4;
+
+    --buy:    #2F7D4F;
+    --sell:   #B4453A;
+    --wait:   #A8770F;
+    --none:   #6E7B79;
+
+    --a-orch:  #37474F;
+    --a-data:  #45688C;
+    --a-tech:  #0E6E66;
+    --a-risk:  #9A6516;
+    --a-skep:  #6E4B8F;
+    --a-dec:   #1F3A38;
+
+    --shadow: 0 1px 2px rgba(20,32,31,.05), 0 8px 28px rgba(20,32,31,.07);
+
+    --step:  clamp(.95rem, .3vw + .88rem, 1.02rem);
+    --lead:  1.65;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #0B1211;
+      --sheet:      #141D1C;
+      --ink:        #E6ECEA;
+      --ink-soft:   #C0CCC9;
+      --muted:      #8E9D9A;
+      --line:       #26332F;
+      --line-soft:  #1D2827;
+      --accent:     #58B6A9;
+      --accent-dim: #16302D;
+      --code-bg:    #1B2625;
+
+      --buy:    #63B884;
+      --sell:   #E0796C;
+      --wait:   #D3A63F;
+      --none:   #8E9D9A;
+
+      --a-orch:  #94A7AE;
+      --a-data:  #7FA6CE;
+      --a-tech:  #58B6A9;
+      --a-risk:  #D3A63F;
+      --a-skep:  #AE8FD0;
+      --a-dec:   #9EBFBB;
+
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #0B1211;
+    --sheet:      #141D1C;
+    --ink:        #E6ECEA;
+    --ink-soft:   #C0CCC9;
+    --muted:      #8E9D9A;
+    --line:       #26332F;
+    --line-soft:  #1D2827;
+    --accent:     #58B6A9;
+    --accent-dim: #16302D;
+    --code-bg:    #1B2625;
+
+    --buy:    #63B884;
+    --sell:   #E0796C;
+    --wait:   #D3A63F;
+    --none:   #8E9D9A;
+
+    --a-orch:  #94A7AE;
+    --a-data:  #7FA6CE;
+    --a-tech:  #58B6A9;
+    --a-risk:  #D3A63F;
+    --a-skep:  #AE8FD0;
+    --a-dec:   #9EBFBB;
+
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+    font-size: var(--step);
+    line-height: var(--lead);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap {
+    max-width: 62rem;
+    margin: 0 auto;
+    padding: clamp(1.25rem, 3vw, 2.75rem) clamp(.85rem, 3vw, 2rem) 4rem;
+    display: flex;
+    flex-direction: column;
+    gap: clamp(1.25rem, 2.5vw, 2rem);
+  }
+
+  /* ---------------------------------------------------------- cabecera doc */
+  .masthead {
+    display: flex;
+    flex-direction: column;
+    gap: .55rem;
+    padding-bottom: 1.1rem;
+    border-bottom: 2px solid var(--ink);
+  }
+  .masthead h1 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-weight: 600;
+    font-size: clamp(1.7rem, 4vw, 2.6rem);
+    line-height: 1.12;
+    letter-spacing: -.015em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  .masthead p {
+    margin: 0;
+    color: var(--ink-soft);
+    max-width: 46rem;
+    font-size: 1.02rem;
+  }
+  .kicker {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .7rem;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+  }
+  .masthead-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem 1.1rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .74rem;
+    color: var(--muted);
+    margin-top: .2rem;
+  }
+
+  /* ------------------------------------------------------------------ hoja */
+  .sheet {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    box-shadow: var(--shadow);
+    padding: clamp(1.35rem, 3.4vw, 3rem);
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+  .sheet-head {
+    display: flex;
+    align-items: baseline;
+    gap: .9rem;
+    padding-bottom: .7rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet-num {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    font-weight: 600;
+    letter-spacing: .12em;
+    color: var(--sheet);
+    background: var(--ink);
+    padding: .22rem .5rem;
+    border-radius: 2px;
+    flex: none;
+  }
+  .sheet-head h2 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: clamp(1.25rem, 2.4vw, 1.65rem);
+    font-weight: 600;
+    margin: 0;
+    letter-spacing: -.01em;
+    text-wrap: balance;
+  }
+
+  h3 {
+    font-family: "IBM Plex Serif", Georgia, serif;
+    font-size: 1.12rem;
+    font-weight: 600;
+    margin: 0 0 .45rem;
+    letter-spacing: -.005em;
+  }
+  h4 {
+    font-family: "IBM Plex Sans", system-ui, sans-serif;
+  }
+  .block { display: flex; flex-direction: column; gap: .7rem; }
+  p { margin: 0; max-width: 68ch; }
+  .lead { font-size: 1.07rem; color: var(--ink-soft); }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code, .mono {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .855em;
+  }
+  code {
+    background: var(--code-bg);
+    border: 1px solid var(--line-soft);
+    border-radius: 2px;
+    padding: .06em .32em;
+    color: var(--ink);
+    white-space: nowrap;
+  }
+
+  .ref {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .74rem;
+    color: var(--muted);
+  }
+  .ref b { color: var(--accent); font-weight: 500; }
+  .ref code { background: none; border: none; padding: 0; color: inherit; }
+
+  /* ------------------------------------------------------------ definición */
+  dl.terms {
+    margin: 0;
+    display: grid;
+    grid-template-columns: minmax(7rem, 9rem) 1fr;
+    gap: .55rem 1.1rem;
+    align-items: baseline;
+  }
+  dl.terms dt {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .78rem;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: .01em;
+  }
+  dl.terms dd { margin: 0; color: var(--ink-soft); }
+  @media (max-width: 33rem) {
+    dl.terms { grid-template-columns: 1fr; gap: .15rem; }
+    dl.terms dd { margin-bottom: .5rem; }
+  }
+
+  /* --------------------------------------------------------- fichas agente */
+  .roster { display: flex; flex-direction: column; gap: 0; }
+  .who {
+    display: grid;
+    grid-template-columns: 10rem 1fr;
+    gap: .3rem 1.2rem;
+    padding: .72rem 0;
+    border-top: 1px solid var(--line-soft);
+    align-items: start;
+  }
+  .who:first-child { border-top: 1px solid var(--line); }
+  .who-name {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .84rem;
+    font-weight: 600;
+    color: var(--agent, var(--ink));
+  }
+  .dot {
+    width: .5rem; height: .5rem;
+    border-radius: 50%;
+    background: var(--agent, var(--ink));
+    flex: none;
+    transform: translateY(-.05em);
+  }
+  .who-body { display: flex; flex-direction: column; gap: .25rem; }
+  .who-body p { font-size: .97rem; }
+  @media (max-width: 40rem) {
+    .who { grid-template-columns: 1fr; }
+  }
+
+  /* ------------------------------------------------------------- diagrama */
+  .figure { display: flex; flex-direction: column; gap: .5rem; margin: 0; }
+  .figure-scroll { overflow-x: auto; padding-bottom: .3rem; }
+  .figure svg { display: block; min-width: 42rem; width: 100%; height: auto; }
+  figcaption {
+    font-size: .82rem;
+    color: var(--muted);
+    max-width: 60ch;
+  }
+  .svg-label { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; font-weight: 600; }
+  .svg-sub   { font-family: "IBM Plex Sans", sans-serif; font-size: 10.5px; fill: var(--muted); }
+  .svg-edge  { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 9.5px; letter-spacing: .02em; }
+
+  /* ------------------------------------------------------------ secuencia */
+  ol.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    counter-reset: step;
+    display: flex;
+    flex-direction: column;
+  }
+  ol.steps > li {
+    counter-increment: step;
+    display: grid;
+    grid-template-columns: 2.1rem 1fr;
+    gap: .2rem .95rem;
+    padding: .85rem 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  ol.steps > li:first-child { border-top: none; padding-top: .2rem; }
+  ol.steps > li::before {
+    content: counter(step, decimal-leading-zero);
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--accent);
+    padding-top: .12rem;
+  }
+  .step-body { display: flex; flex-direction: column; gap: .3rem; }
+  .step-body h4 {
+    margin: 0;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -.005em;
+  }
+  .step-body p { font-size: .97rem; }
+
+  ol.compact > li { padding: .5rem 0; }
+  ol.compact > li:first-child { padding-top: .1rem; }
+
+  /* --------------------------------------------------------------- tablas */
+  .table-scroll { overflow-x: auto; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 30rem;
+    font-size: .93rem;
+  }
+  caption {
+    text-align: left;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding-bottom: .45rem;
+  }
+  th, td {
+    text-align: left;
+    padding: .5rem .8rem .5rem 0;
+    border-bottom: 1px solid var(--line-soft);
+    vertical-align: top;
+  }
+  thead th {
+    border-bottom: 1px solid var(--ink);
+    font-size: .76rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  tbody th {
+    font-weight: 600;
+    color: var(--ink-soft);
+    font-size: .88rem;
+    white-space: nowrap;
+  }
+  td.rule-id {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-weight: 600;
+    color: var(--accent);
+    white-space: nowrap;
+    font-size: .84rem;
+  }
+  tbody tr:last-child td, tbody tr:last-child th { border-bottom: none; }
+
+  /* -------------------------------------------------------------- señales */
+  .signals { display: flex; flex-wrap: wrap; gap: .45rem; }
+  .signal {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .76rem;
+    font-weight: 600;
+    letter-spacing: .04em;
+    padding: .22rem .55rem;
+    border-radius: 2px;
+    border: 1px solid currentColor;
+    color: var(--tone);
+  }
+
+  /* ---------------------------------------------------------------- notas */
+  .callout {
+    border-left: 3px solid var(--accent);
+    background: var(--accent-dim);
+    padding: .85rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    border-radius: 0 2px 2px 0;
+  }
+  .callout h3 { margin: 0; font-size: 1rem; }
+  .callout p { font-size: .93rem; color: var(--ink-soft); }
+
+  .warn {
+    border: 1px solid var(--sell);
+    color: var(--ink-soft);
+    padding: .85rem 1rem;
+    border-radius: 2px;
+    font-size: .91rem;
+  }
+  .warn b { color: var(--sell); font-weight: 600; }
+
+  pre.shell {
+    margin: 0;
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: .7rem .85rem;
+    overflow-x: auto;
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .82rem;
+    line-height: 1.6;
+    color: var(--ink);
+  }
+  pre.shell .c { color: var(--muted); }
+
+  .grid-2 {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+    gap: 1.4rem;
+    align-items: start;
+  }
+
+  .colophon {
+    font-family: "IBM Plex Mono", ui-monospace, monospace;
+    font-size: .72rem;
+    color: var(--muted);
+    text-align: center;
+    padding-top: .5rem;
+    max-width: none;
+  }
+
+  a { color: var(--accent); }
+  a:focus-visible, [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+
+  @media print {
+    body { background: #fff; }
+    .wrap { max-width: none; padding: 0; gap: 0; }
+    .sheet {
+      box-shadow: none;
+      border: none;
+      padding: 0 0 1rem;
+      break-after: page;
+      page-break-after: always;
+    }
+    .sheet:last-of-type { break-after: auto; page-break-after: auto; }
+    .colophon { display: none; }
+  }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <span class="kicker">Onboarding · agentorchestrator</span>
+    <h1>Un comité de analistas que discute solo</h1>
+    <p class="lead">Cómo funciona la aplicación de punta a punta, contada para alguien que nunca ha trabajado
+      con IA ni con «agentes». Tres hojas: qué es y quién participa, qué ocurre exactamente al pulsar un
+      botón, y dónde interviene el modelo de lenguaje.</p>
+    <div class="masthead-meta">
+      <span>backend: FastAPI + Python</span>
+      <span>frontend: Next.js + React</span>
+      <span>3 hojas</span>
+    </div>
+  </header>
+
+  <!-- ============================================================ HOJA 1 -->
+  <section class="sheet">
+    <div class="sheet-head">
+      <span class="sheet-num">HOJA 1</span>
+      <h2>La idea y quiénes participan</h2>
+    </div>
+
+    <div class="block">
+      <h3>En una frase</h3>
+      <p>Escribes uno o varios símbolos de bolsa —<code>AAPL</code>, <code>MSFT</code>— y la aplicación monta
+        un pequeño comité de analistas artificiales que se pasan mensajes entre sí, discuten, y acaban
+        emitiendo una etiqueta por símbolo. Todo lo que se dicen aparece en pantalla mientras ocurre.</p>
+      <div class="signals">
+        <span class="signal" style="--tone: var(--buy)">COMPRA</span>
+        <span class="signal" style="--tone: var(--sell)">VENTA</span>
+        <span class="signal" style="--tone: var(--wait)">ESPERAR</span>
+        <span class="signal" style="--tone: var(--none)">NO_ANALIZABLE</span>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3>Tres palabras que hay que entender antes de seguir</h3>
+      <dl class="terms">
+        <dt>LLM</dt>
+        <dd>Un <em>modelo de lenguaje</em>: un programa que recibe texto y devuelve texto. Sabe redactar y
+          razonar sobre lo que le cuentas, pero no sabe nada del mundo real si no se lo pasas tú. Aquí puede
+          ser Claude, un modelo servido vía OpenRouter, o un imitador local para probar sin internet.</dd>
+
+        <dt>Agente</dt>
+        <dd>Un especialista con un único trabajo. Técnicamente es una clase de Python que recibe un mensaje y
+          devuelve otro mensaje —<code>BaseAgent.handle()</code>—, nada más. Lo que lo convierte en «agente»
+          es que decide por su cuenta si necesita más datos o si tiene que discutir con un compañero.</dd>
+
+        <dt>Herramienta</dt>
+        <dd>Una función normal de código que el modelo puede pedir que se ejecute: «calcúlame el RSI»,
+          «tráeme más historial». El modelo no calcula nada; <strong>pide</strong>, y el código responde con
+          números reales.</dd>
+      </dl>
+    </div>
+
+    <div class="block">
+      <h3>Los seis participantes</h3>
+      <p>Cinco analistas y un coordinador. Cada uno vive en su propio archivo dentro de
+        <code>backend/app/agents/</code>.</p>
+
+      <div class="roster">
+        <div class="who" style="--agent: var(--a-orch)">
+          <div class="who-name"><span class="dot"></span>orchestrator</div>
+          <div class="who-body">
+            <p>El jefe de sala. No opina: reparte el trabajo, entrega los mensajes de uno a otro y marca el
+              orden de la conversación. Es el único que conoce el proceso completo.</p>
+            <span class="ref"><b>orchestrator.py</b> · clase <code>Orchestrator</code></span>
+          </div>
+        </div>
+
+        <div class="who" style="--agent: var(--a-data)">
+          <div class="who-name"><span class="dot"></span>market_data</div>
+          <div class="who-body">
+            <p>El documentalista. Es el <em>único</em> que habla con la fuente de precios y descarga el
+              histórico diario. Comprueba que la serie no venga corrupta —cierres negativos, fechas
+              desordenadas— y la deja disponible bajo una etiqueta, el <code>data_ref</code>.</p>
+            <span class="ref"><b>market_data_agent.py</b> · <code>MarketDataAgent.process()</code></span>
+          </div>
+        </div>
+
+        <div class="who" style="--agent: var(--a-tech)">
+          <div class="who-name"><span class="dot"></span>technical</div>
+          <div class="who-body">
+            <p>El chartista. Calcula indicadores clásicos —medias móviles SMA20 y SMA50, RSI, MACD, retorno a
+              20 sesiones— y fija una postura: ALCISTA, BAJISTA o NEUTRAL.</p>
+            <span class="ref"><b>technical_agent.py</b> · <code>indicator_facts()</code>, <code>rule_stance()</code></span>
+          </div>
+        </div>
+
+        <div class="who" style="--agent: var(--a-risk)">
+          <div class="who-name"><span class="dot"></span>risk</div>
+          <div class="who-body">
+            <p>El prudente. Mide volatilidad anualizada, caída máxima histórica (<em>drawdown</em>) y ATR, y
+              asigna BAJO, MEDIO o ALTO. Si le han dado pocas sesiones no improvisa: <strong>le pide más
+              historial a market_data</strong> y vuelve a calcular.</p>
+            <span class="ref"><b>risk_agent.py</b> · <code>risk_metrics()</code>, <code>rule_risk_level()</code></span>
+          </div>
+        </div>
+
+        <div class="who" style="--agent: var(--a-skep)">
+          <div class="who-name"><span class="dot"></span>skeptic</div>
+          <div class="who-body">
+            <p>El abogado del diablo, y la pieza más interesante del diseño. No repite el análisis: busca
+              contradicciones entre lo que han dicho los otros dos. Si encuentra alguna, <strong>reta al
+              técnico a la cara</strong> y espera su respuesta.</p>
+            <span class="ref"><b>skeptic_agent.py</b> · <code>find_counterarguments()</code></span>
+          </div>
+        </div>
+
+        <div class="who" style="--agent: var(--a-dec)">
+          <div class="who-name"><span class="dot"></span>decision</div>
+          <div class="who-body">
+            <p>El que firma. Junta las tres opiniones y la respuesta al reto, y emite la etiqueta final con un
+              nivel de confianza y una justificación en prosa.</p>
+            <span class="ref"><b>decision_agent.py</b> · <code>decide()</code></span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3>Cómo está partida la aplicación</h3>
+      <div class="grid-2">
+        <div class="block" style="gap:.25rem">
+          <h4 style="font-size:.95rem;margin:0">Backend · <span class="mono">backend/app/</span></h4>
+          <p style="font-size:.95rem">Un servidor FastAPI que expone la API, arranca el comité y va emitiendo
+            <em>eventos</em>: «este agente ha empezado», «se ha enviado este mensaje», «se ha corregido esta
+            salida». Cada ejecución se guarda entera en un JSON dentro de <code>backend/runs/</code>, así que
+            puede reproducirse después paso a paso.</p>
+        </div>
+        <div class="block" style="gap:.25rem">
+          <h4 style="font-size:.95rem;margin:0">Frontend · <span class="mono">frontend/</span></h4>
+          <p style="font-size:.95rem">Una página de Next.js que abre un WebSocket contra el servidor y pinta
+            los eventos en vivo: el grafo de agentes iluminándose, el registro de mensajes, un inspector para
+            abrir cualquiera de ellos, la tabla de decisiones y el coste acumulado.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ HOJA 2 -->
+  <section class="sheet">
+    <div class="sheet-head">
+      <span class="sheet-num">HOJA 2</span>
+      <h2>Qué ocurre exactamente al pulsar «Analizar»</h2>
+    </div>
+
+    <figure class="figure">
+      <div class="figure-scroll">
+        <svg viewBox="0 0 880 288" role="img" aria-label="Diagrama del recorrido de un símbolo: el orquestador pide datos a market_data, lanza technical y risk en paralelo, risk puede pedir más historial, skeptic reta a technical, y decision firma la señal final.">
+          <defs>
+            <marker id="ah" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M0,0 L8,4 L0,8 z" fill="currentColor"/>
+            </marker>
+          </defs>
+
+          <g fill="none" stroke-width="1.4" color="var(--muted)" stroke="var(--muted)">
+            <path d="M126,70 L174,70" marker-end="url(#ah)"/>
+            <path d="M72,88 L72,142 L174,142" marker-end="url(#ah)"/>
+            <path d="M72,88 L72,224 L174,224" marker-end="url(#ah)"/>
+            <path d="M302,142 L358,142" marker-end="url(#ah)"/>
+            <path d="M302,224 L330,224 L330,160 L358,160" marker-end="url(#ah)"/>
+            <path d="M486,151 L542,151" marker-end="url(#ah)"/>
+            <path d="M670,151 L726,151" marker-end="url(#ah)"/>
+          </g>
+
+          <g fill="none" stroke-width="1.4" stroke-dasharray="4 3" color="var(--a-risk)" stroke="var(--a-risk)">
+            <path d="M174,242 L146,242 L146,88 L174,88" marker-end="url(#ah)"/>
+          </g>
+
+          <g fill="none" stroke-width="1.4" stroke-dasharray="4 3" color="var(--a-skep)" stroke="var(--a-skep)">
+            <path d="M542,185 L514,185 L514,130 L486,130" marker-end="url(#ah)"/>
+            <path d="M486,115 L514,115 L514,100 L554,100 L554,133" marker-end="url(#ah)"/>
+          </g>
+
+          <g>
+            <rect x="18" y="52" width="108" height="36" rx="2" fill="none" stroke="var(--a-orch)" stroke-width="1.5"/>
+            <text x="72" y="68" text-anchor="middle" class="svg-label" fill="var(--a-orch)">orchestrator</text>
+            <text x="72" y="81" text-anchor="middle" class="svg-sub">reparte y entrega</text>
+          </g>
+
+          <g>
+            <rect x="174" y="52" width="128" height="36" rx="2" fill="none" stroke="var(--a-data)" stroke-width="1.5"/>
+            <text x="238" y="68" text-anchor="middle" class="svg-label" fill="var(--a-data)">market_data</text>
+            <text x="238" y="81" text-anchor="middle" class="svg-sub">precios históricos</text>
+          </g>
+
+          <g>
+            <rect x="174" y="124" width="128" height="36" rx="2" fill="none" stroke="var(--a-tech)" stroke-width="1.5"/>
+            <text x="238" y="140" text-anchor="middle" class="svg-label" fill="var(--a-tech)">technical</text>
+            <text x="238" y="153" text-anchor="middle" class="svg-sub">SMA · RSI · MACD</text>
+          </g>
+
+          <g>
+            <rect x="174" y="206" width="128" height="36" rx="2" fill="none" stroke="var(--a-risk)" stroke-width="1.5"/>
+            <text x="238" y="222" text-anchor="middle" class="svg-label" fill="var(--a-risk)">risk</text>
+            <text x="238" y="235" text-anchor="middle" class="svg-sub">volatilidad · drawdown</text>
+          </g>
+
+          <g>
+            <rect x="358" y="133" width="128" height="36" rx="2" fill="none" stroke="var(--a-skep)" stroke-width="1.5"/>
+            <text x="422" y="149" text-anchor="middle" class="svg-label" fill="var(--a-skep)">skeptic</text>
+            <text x="422" y="162" text-anchor="middle" class="svg-sub">busca contradicciones</text>
+          </g>
+
+          <g>
+            <rect x="542" y="133" width="128" height="36" rx="2" fill="none" stroke="var(--a-dec)" stroke-width="1.5"/>
+            <text x="606" y="149" text-anchor="middle" class="svg-label" fill="var(--a-dec)">decision</text>
+            <text x="606" y="162" text-anchor="middle" class="svg-sub">firma la señal</text>
+          </g>
+
+          <g>
+            <rect x="726" y="133" width="136" height="36" rx="2" fill="var(--accent-dim)" stroke="var(--accent)" stroke-width="1.5"/>
+            <text x="794" y="149" text-anchor="middle" class="svg-label" fill="var(--accent)">resultado</text>
+            <text x="794" y="162" text-anchor="middle" class="svg-sub">COMPRA · VENTA · ESPERAR</text>
+          </g>
+
+          <text x="146" y="40" class="svg-edge" fill="var(--a-risk)">info_request: «necesito más historial»</text>
+          <text x="500" y="204" text-anchor="middle" class="svg-edge" fill="var(--a-skep)">challenge → mantiene / concede</text>
+          <text x="238" y="272" text-anchor="middle" class="svg-edge" fill="var(--muted)">technical y risk trabajan en paralelo</text>
+        </svg>
+      </div>
+      <figcaption>Las flechas continuas son el guion fijo del orquestador. Las discontinuas son iniciativa de un
+        agente: risk pidiendo los datos que le faltan, y skeptic retando al técnico.</figcaption>
+    </figure>
+
+    <ol class="steps">
+      <li>
+        <div class="step-body">
+          <h4>El navegador crea una ejecución</h4>
+          <p>El formulario recoge los símbolos y llama a <code>POST /api/runs</code>. El servidor los limpia y
+            valida, crea un <code>Orchestrator</code> y lanza la ejecución en segundo plano; responde de
+            inmediato con un <code>run_id</code>. El navegador abre entonces un WebSocket contra
+            <code>/ws/runs/{run_id}</code> para ir recibiendo los eventos según se producen.</p>
+          <span class="ref"><b>main.py:136</b> <code>create_run()</code> · <b>frontend/lib/websocket.ts</b> <code>connectRunSocket()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>El orquestador reparte los símbolos</h4>
+          <p>Cada símbolo se analiza de forma independiente y varios avanzan a la vez, con un tope —tres
+            simultáneos por defecto— para no saturar ni la fuente de datos ni el modelo. Si uno revienta por
+            un error inesperado se le asigna <code>NO_ANALIZABLE</code> y los demás continúan.</p>
+          <span class="ref"><b>orchestrator.py:121</b> <code>Orchestrator.run()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>Se piden los precios</h4>
+          <p>El orquestador envía a <span class="mono">market_data</span> un mensaje de tipo
+            <code>task_request</code> pidiendo unas 130 sesiones. El agente llama al proveedor de datos
+            —Yahoo Finance, o el simulador—, valida la serie y responde con un resumen y el
+            <code>data_ref</code>. <strong>Si el símbolo no existe o no hay datos, aquí se corta</strong>: se
+            salta directo a decision, que emite <code>NO_ANALIZABLE</code>.</p>
+          <span class="ref"><b>orchestrator.py:168</b> <code>analyze_symbol()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>technical y risk trabajan a la vez</h4>
+          <p>Ambos reciben el mismo <code>data_ref</code> y arrancan en paralelo. technical calcula los
+            indicadores y puntúa: el cierre por encima de la SMA50 suma, la SMA20 por debajo de la SMA50
+            resta, un RSI por encima de 70 resta… Con puntuación ≥ 2 sale ALCISTA; con ≤ −2, BAJISTA; en
+            medio, NEUTRAL.</p>
+          <span class="ref"><b>technical_agent.py:92</b> <code>rule_stance()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>risk pide refuerzos si le faltan datos</h4>
+          <p>Medir un drawdown con 130 sesiones es poco fiable: hacen falta 200. Cuando no llega,
+            <span class="mono">risk</span> manda un <code>info_request</code> a
+            <span class="mono">market_data</span> pidiendo un año entero y recalcula con la serie ampliada. Es
+            un agente hablando con otro por iniciativa propia, y el mensaje aparece en la traza como cualquier
+            otro.</p>
+          <span class="ref"><b>risk_agent.py:124</b> <code>_request_history()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>skeptic busca la contradicción y reta</h4>
+          <p>Recibe las dos opiniones y comprueba incoherencias concretas: postura alcista con el RSI en
+            sobrecompra, una postura firme sostenida con confianza baja, una señal de compra sobre un activo
+            de riesgo ALTO, un momento a 20 sesiones que contradice la lectura… Si encuentra alguna, envía un
+            mensaje <code>challenge</code> <em>directamente</em> a technical, que responde
+            <span class="mono">maintains</span> —mantiene— o <span class="mono">concedes</span> —concede y
+            rebaja su confianza; si esta baja de 0,5 su postura pasa a NEUTRAL.</p>
+          <span class="ref"><b>skeptic_agent.py:59</b> <code>find_counterarguments()</code> · <b>:100</b> <code>_challenge()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>decision firma</h4>
+          <p>Usa la postura técnica <em>después</em> del reto, no la original. Seis reglas cubren todos los
+            casos: R1 alcista con riesgo no alto y sin objeciones → COMPRA; R2 bajista sin objeciones → VENTA;
+            R3 neutral → ESPERAR; R4 alcista con riesgo ALTO → ESPERAR (veto de riesgo); R5 discrepancia sin
+            resolver → ESPERAR; R0 sin datos → NO_ANALIZABLE.</p>
+          <span class="ref"><b>decision_agent.py:67</b> <code>decide()</code></span>
+        </div>
+      </li>
+
+      <li>
+        <div class="step-body">
+          <h4>Todo queda grabado</h4>
+          <p>Ningún mensaje viaja por libre: todos pasan por <code>Orchestrator.deliver()</code>, que primero
+            publica el evento, luego aplica un retardo artificial —para que se vea el mensaje «en tránsito» en
+            la animación— y solo después lo entrega al destinatario. Cada evento se numera, se guarda en disco
+            y se reenvía por el WebSocket. Al reconectar, el servidor manda primero todo el historial y luego
+            sigue en vivo.</p>
+          <span class="ref"><b>orchestrator.py:84</b> <code>deliver()</code> · <b>events.py:26</b> <code>EventBus.emit()</code></span>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <!-- ============================================================ HOJA 3 -->
+  <section class="sheet">
+    <div class="sheet-head">
+      <span class="sheet-num">HOJA 3</span>
+      <h2>Dónde está la IA y por qué no se la cree a ciegas</h2>
+    </div>
+
+    <div class="block">
+      <p class="lead">Hasta aquí apenas ha hecho falta mencionar el modelo de lenguaje, y no es casualidad: el
+        esqueleto del proceso es código determinista. La aplicación tiene dos modos, y la diferencia entre
+        ellos es <strong>quién decide y quién vigila</strong>.</p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Los dos modos · variable AGENT_MODE</caption>
+          <thead>
+            <tr><th></th><th>Modo <span class="mono">rules</span></th><th>Modo <span class="mono">llm</span></th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <th scope="row">Quién decide</th>
+              <td>El código: las reglas fijan postura, riesgo y decisión.</td>
+              <td>El modelo: razona y propone la conclusión.</td>
+            </tr>
+            <tr>
+              <th scope="row">Papel del modelo</th>
+              <td>Solo redacta la explicación en lenguaje natural.</td>
+              <td>Pide herramientas, encadena pasos y devuelve un JSON con formato fijo.</td>
+            </tr>
+            <tr>
+              <th scope="row">Papel de las reglas</th>
+              <td>Son la decisión.</td>
+              <td>Son el guardarraíl: corrigen al modelo cuando se pasa de frenada.</td>
+            </tr>
+            <tr>
+              <th scope="row">Dónde mirarlo</th>
+              <td><code>BaseAgent.explain()</code><br><span class="ref">base_agent.py:190</span></td>
+              <td><code>BaseAgent.run_agent_loop()</code><br><span class="ref">base_agent.py:250</span></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="block">
+      <h3>El bucle de herramientas, en cuatro movimientos</h3>
+      <p>Es el mecanismo central del modo <span class="mono">llm</span> y el concepto que conviene llevarse de
+        este documento. El agente no le lanza al modelo una pregunta suelta: le pasa unas instrucciones, los
+        hechos conocidos, el formato exacto de respuesta que espera y una lista de herramientas.</p>
+      <ol class="steps compact">
+        <li><div class="step-body"><p>El agente manda al modelo instrucciones, hechos, esquema JSON y herramientas disponibles.</p></div></li>
+        <li><div class="step-body"><p>El modelo responde «ejecuta <code>compute_indicators</code>». No calcula: pide.</p></div></li>
+        <li><div class="step-body"><p>El código ejecuta la función de verdad y le devuelve los números reales. Cada resultado se añade al conjunto de <em>hechos conocidos</em>.</p></div></li>
+        <li><div class="step-body"><p>Se repite hasta que el modelo entrega su JSON final, con un tope de ocho vueltas. Si no termina, se considera fallo y se cae a las reglas.</p></div></li>
+      </ol>
+      <p>Las herramientas son deliberadamente pocas: <code>compute_indicators</code> en technical,
+        <code>compute_risk_metrics</code> y <code>request_history</code> en risk, y
+        <code>challenge_technical</code> en skeptic —esta última <em>envía de verdad</em> el reto al agente
+        técnico y le devuelve al modelo su respuesta.</p>
+    </div>
+
+    <div class="block">
+      <h3>Tres redes de seguridad</h3>
+
+      <p><strong>1 · Nada de números inventados.</strong> Cuando el modelo escribe una cifra se comprueba que
+        esa cifra exista realmente entre los hechos conocidos. Si no aparece, la frase se marca como <em>no
+        anclada</em> y se sustituye por un texto construido únicamente con la evidencia validada.<br>
+        <span class="ref"><b>services/validation.py:78</b> <code>ungrounded_numbers()</code> · <b>:134</b> <code>validate_agent_output()</code></span></p>
+
+      <p><strong>2 · Guardarraíles.</strong> Las mismas reglas que en el otro modo tomaban la decisión, aquí se
+        quedan mirando por encima del hombro. Cuando corrigen al modelo, la corrección se emite como evento y
+        se ve en pantalla: no se esconde.</p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Correcciones automáticas sobre la salida del modelo</caption>
+          <thead>
+            <tr><th>Regla</th><th>Situación</th><th>Corrección</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="rule-id">T1</td><td>Postura opuesta a la de las reglas citando menos de dos evidencias</td><td>Se rebaja a NEUTRAL</td></tr>
+            <tr><td class="rule-id">T2 · T3</td><td>Dice «mantengo» pero cambia de postura, o «concedo» sin bajar la confianza</td><td>Se restaura la coherencia</td></tr>
+            <tr><td class="rule-id">R1</td><td>Declara un riesgo dos niveles por debajo del que indican las métricas</td><td>Se sube al nivel de las reglas</td></tr>
+            <tr><td class="rule-id">S1</td><td>Dice que discrepa pero no aporta ninguna objeción</td><td>Se pasa a «de acuerdo»</td></tr>
+            <tr><td class="rule-id">G1</td><td>COMPRA sobre un activo de riesgo ALTO</td><td>Se convierte en ESPERAR</td></tr>
+            <tr><td class="rule-id">G2</td><td>COMPRA sin postura alcista, o VENTA sin postura bajista</td><td>Se convierte en ESPERAR</td></tr>
+            <tr><td class="rule-id">G3</td><td>El escéptico discrepa y el técnico se mantiene en sus trece</td><td>La confianza se limita a 0,5</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p><strong>3 · Si el modelo falla, la aplicación no.</strong> Sin clave de API, sin internet, con el
+        proveedor caído o devolviendo basura, cada agente cae automáticamente al modo reglas y deja constancia
+        del motivo en su explicación. La ejecución siempre termina y siempre produce un resultado por
+        símbolo.</p>
+    </div>
+
+    <div class="block">
+      <h3>Trazabilidad y coste</h3>
+      <p>Cada llamada al modelo registra sus <em>tokens</em> —las unidades en que se factura— y su coste
+        estimado, agregados por agente y mostrados en vivo en el panel lateral. Y como cada ejecución se
+        guarda entera en <code>backend/runs/</code>, cualquier decisión puede reconstruirse después mensaje a
+        mensaje: qué se pidió, qué devolvió la herramienta, qué escribió el modelo y qué corrigió la regla.</p>
+      <span class="ref"><b>services/costs.py:31</b> <code>summarize_costs()</code> · <b>services/run_store.py</b> <code>RunStore</code></span>
+    </div>
+
+    <div class="grid-2">
+      <div class="callout">
+        <h3>Arrancarla en un solo paso</h3>
+        <pre class="shell"><span class="c">REM  API + interfaz, un único proceso</span>
+.\start-local.bat
+<span class="c">REM  → http://localhost:8000</span></pre>
+        <p>Sin claves configuradas funciona igual, con datos y modelo simulados. La configuración real vive en
+          <code>backend/.env</code>.</p>
+      </div>
+
+      <div class="warn">
+        <p><b>Esto no es asesoramiento financiero.</b> Es una demostración didáctica de coordinación entre
+          agentes. Las señales se calculan sobre precios históricos con reglas simplificadas, no contemplan
+          fundamentales, contexto de mercado ni tu situación personal, y no deben usarse para operar.</p>
+      </div>
+    </div>
+  </section>
+
+  <p class="colophon">agentorchestrator · documento de onboarding · 3 hojas</p>
+</div>
