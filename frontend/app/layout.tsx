@@ -1,16 +1,22 @@
 import type { Metadata } from "next";
+import AppShell from "@/components/rq/AppShell";
+import { RqProvider } from "@/lib/rq/store";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Demo multiagente · trazas de comunicación entre agentes",
+  title: "Revisión de requerimientos · orquestador multiagente",
   description:
-    "Demo educativa: visualización en tiempo real de cómo varios agentes de IA se comunican para analizar activos. No constituye asesoramiento financiero.",
+    "Prototipo: un orquestador y agentes especialistas revisan código, pruebas, Kiuwan, SQL, UI/UX y generan el VTR de cada requerimiento.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className="min-h-screen bg-paper font-sans text-ink-900 antialiased">{children}</body>
+      <body className="min-h-screen bg-paper font-sans text-ink-900 antialiased">
+        <RqProvider>
+          <AppShell>{children}</AppShell>
+        </RqProvider>
+      </body>
     </html>
   );
 }
