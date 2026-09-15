@@ -7,6 +7,9 @@ const isExport = process.env.NEXT_OUTPUT === "export";
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: isExport ? "export" : "standalone",
+  // En export cada ruta se genera como carpeta con index.html (agentes/index.html, monitor/index.html…),
+  // que es lo que StaticFiles de FastAPI sabe servir al recargar la página directamente en esa URL.
+  trailingSlash: isExport,
   reactStrictMode: true,
   images: { unoptimized: true },
   env: {

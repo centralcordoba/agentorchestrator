@@ -14,7 +14,7 @@ const NAV = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
-  const { currentUserId, setCurrentUser, resetDemo } = useRq();
+  const { currentUserId, setCurrentUser, resetDemo, ready } = useRq();
   const user = USERS.find((u) => u.id === currentUserId) ?? USERS[0];
 
   if (pathname.startsWith("/demo-bolsa")) return <>{children}</>;
@@ -68,7 +68,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
       </header>
-      <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6">{children}</div>
+      {/* El contenido depende del reloj y de localStorage: se pinta solo en el navegador, tras cargar el estado.
+          Así el HTML estático (generado en el build) no choca con lo que ve el usuario al hidratar. */}
+      <div className="mx-auto w-full max-w-[1440px] flex-1 px-4 py-5 sm:px-6">
+        {ready ? children : <p className="py-16 text-center text-[13px] text-ink-400">Cargando…</p>}
+      </div>
       <footer className="border-t border-line bg-surface">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3 px-4 py-2.5 text-[11.5px] text-ink-500 sm:px-6">
           <span>Prototipo de interfaz sin backend: ejecuciones, usuarios y consumo son simulados.</span>
