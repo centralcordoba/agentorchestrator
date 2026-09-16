@@ -1,14 +1,15 @@
 // Simulador de ejecución sin backend. A partir del requerimiento y de la ejecución genera una
 // traza determinista (misma ejecución → mismos eventos) con desfases temporales. La UI muestra
 // en cada momento los eventos cuyo desfase ya transcurrió, así que sobrevive a recargas.
-import { AGENTS, modelInfo } from "./agents";
+import { AGENTS, PROVIDER_BAA, PROVIDER_LABELS, modelInfo } from "./agents";
+import { IDENTIFIER_LABELS, SAFEGUARD_LABEL, WHERE_LABELS, handlesPhi } from "./privacy";
 import { consolidatedFindings, deliverablesFor } from "./scenarios";
 import type { AgentId, AgentRunStatus, Requirement, Run, RunSpeed, TraceEvent } from "./types";
 
 export const SPEED_FACTOR: Record<RunSpeed, number> = { rapido: 0.35, normal: 1, lento: 2 };
 export const SPEED_LABELS: Record<RunSpeed, string> = { rapido: "Rápido", normal: "Normal", lento: "Lento" };
 
-const PARALLEL: AgentId[] = ["tests", "kiuwan", "sql", "uiux"];
+const PARALLEL: AgentId[] = ["tests", "kiuwan", "sql", "uiux", "privacy"];
 
 function rng(seed: string) {
   let h = 2166136261;
@@ -25,15 +26,25 @@ interface Step extends Draft {
   gap: number; // ms antes de este evento (sin escalar)
 }
 
+type BeforeHook = (s: Step) => Draft | null;
+
 class Track {
   t: number;
   events: (Draft & { at: number })[] = [];
-  constructor(start: number) {
+  constructor(
+    start: number,
+    private before?: BeforeHook,
+  ) {
     this.t = start;
   }
   push(s: Step) {
     const { gap, ...ev } = s;
     this.t += gap;
+    const extra = this.before?.(s);
+    if (extra) {
+      this.events.push({ ...extra, at: this.t });
+      this.t += 250;
+    }
     this.events.push({ ...ev, at: this.t });
   }
 }
@@ -42,7 +53,7 @@ const timelineCache = new Map<string, TraceEvent[]>();
 
 export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   const realRepo = req.attachments.find((a) => a.kind === "repo")?.repo;
-  const key = `${run.id}:${run.enabledAgents.join(",")}:${run.speed}:${realRepo?.headSha ?? ""}`;
+  const key = `${run.id}:${run.enabledAgents.join(",")}:${run.speed}:${realRepo?.headSha ?? ""}:${req.phi}`;
   const cached = timelineCache.get(key);
   if (cached) return cached;
 
@@ -51,6 +62,24 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   const on = (a: AgentId) => run.enabledAgents.includes(a);
   const d = deliverablesFor(req, run.enabledAgents);
   const all: (Draft & { at: number })[] = [];
+
+  // Pasarela DLP: con PHI, antes de la primera llamada al modelo de cada agente se redactan los identificadores.
+  const redacted = new Set<AgentId>();
+  const phiTypes = d.privacy.detections.reduce<Record<string, number>>((acc, x) => ({ ...acc, [IDENTIFIER_LABELS[x.identifier]]: (acc[IDENTIFIER_LABELS[x.identifier]] ?? 0) + 1 }), {});
+  const dlp: BeforeHook = (step) => {
+    if (step.type !== "llm_call" || !handlesPhi(req) || !d.privacy.detections.length) return null;
+    if (step.agent === "orchestrator" || step.agent === "verdict" || redacted.has(step.agent)) return null;
+    redacted.add(step.agent);
+    const p = run.profiles[step.agent];
+    const baa = PROVIDER_BAA[p.provider];
+    return {
+      type: "phi_redacted",
+      agent: step.agent,
+      title: `Pasarela DLP: ${d.privacy.detections.length} dato(s) de PHI redactado(s) antes de llamar al modelo`,
+      detail: `Los valores se sustituyen por marcadores ([AFILIADO_1], [PACIENTE_1]…) y no salen de la organización.${baa === false ? ` ${PROVIDER_LABELS[p.provider]} no tiene BAA: solo recibe contexto redactado.` : ""}`,
+      data: { por_tipo: phiTypes, proveedor: PROVIDER_LABELS[p.provider], baa: baa === null ? "no aplica" : baa ? "sí" : "no" },
+    };
+  };
 
   const llm = (agent: AgentId, step: number, title: string, inBase: number, outBase: number, gap = 1400): Step => {
     const p = run.profiles[agent];
@@ -88,7 +117,7 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
 
   // ------------------------------------------------------------ 2. código
   const repo = req.attachments.find((a) => a.kind === "repo");
-  const code = new Track(orch.t);
+  const code = new Track(orch.t, dlp);
   if (on("code")) {
     code.push(msg("orchestrator", "code", "task_request", `Revisar ${realRepo ? `${realRepo.fullName} (${realRepo.rangeLabel})` : repo?.detail ?? "la rama"} contra ${req.acceptanceCriteria.length} criterios.`));
     code.push({ gap: 300, type: "agent_started", agent: "code", title: "Revisión de código iniciada" });
@@ -119,7 +148,7 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   const ctxNote = hasCode ? "Recibe el mapa del cambio." : "Sin mapa del cambio: lee el diff directamente.";
 
   if (on("tests")) {
-    const tr = new Track(parStart);
+    const tr = new Track(parStart, dlp);
     tr.push(msg("orchestrator", "tests", "task_request", ctxNote, 200));
     tr.push({ gap: 300, type: "agent_started", agent: "tests", title: "Generación de pruebas iniciada" });
     tr.push(tool("tests", "read_change_map", {}, { archivos: d.code.changeMap.length }, 500));
@@ -143,7 +172,7 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   }
 
   if (on("kiuwan")) {
-    const kt = new Track(parStart + 150);
+    const kt = new Track(parStart + 150, dlp);
     const csv = req.attachments.find((a) => a.kind === "kiuwan_csv");
     kt.push(msg("orchestrator", "kiuwan", "task_request", `Analizar ${csv?.name ?? "CSV"}.`, 200));
     kt.push({ gap: 300, type: "agent_started", agent: "kiuwan", title: "Análisis de Kiuwan iniciado" });
@@ -166,7 +195,7 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   }
 
   if (on("sql")) {
-    const st = new Track(parStart + 300);
+    const st = new Track(parStart + 300, dlp);
     st.push(msg("orchestrator", "sql", "task_request", `Revisar SQL (${d.sql.engine}).`, 200));
     st.push({ gap: 300, type: "agent_started", agent: "sql", title: "Revisión SQL iniciada" });
     st.push(tool("sql", "parse_sql", { scripts: d.sql.scripts.map((s) => s.file) }, { sentencias: d.sql.scripts.reduce((s, x) => s + x.statements, 0) }, 700));
@@ -178,7 +207,7 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   }
 
   if (on("uiux")) {
-    const ut = new Track(parStart + 450);
+    const ut = new Track(parStart + 450, dlp);
     ut.push(msg("orchestrator", "uiux", "task_request", "Probar pantallas afectadas con Playwright.", 200));
     ut.push({ gap: 300, type: "agent_started", agent: "uiux", title: "Pruebas de interfaz iniciadas" });
     ut.push(llm("uiux", 1, "Diseña escenarios Playwright a partir de los criterios", 5600, 1200, 1600));
@@ -192,8 +221,32 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
     parEnd = Math.max(parEnd, ut.t);
   }
 
+  if (on("privacy")) {
+    const pt = new Track(parStart + 600, dlp);
+    const pr = d.privacy;
+    const byWhere = pr.detections.reduce<Record<string, number>>((acc, x) => ({ ...acc, [WHERE_LABELS[x.where]]: (acc[WHERE_LABELS[x.where]] ?? 0) + 1 }), {});
+    const atRisk = pr.safeguards.filter((x) => x.status === "riesgo");
+    pt.push(msg("orchestrator", "privacy", "task_request", handlesPhi(req) ? "Requerimiento con PHI: revisar identificadores y salvaguardas 164.312." : "Clasificado sin PHI: verificar que el cambio no la introduce.", 200));
+    pt.push({ gap: 300, type: "agent_started", agent: "privacy", title: "Revisión de privacidad HIPAA iniciada" });
+    pt.push(tool("privacy", "scan_phi_identifiers", { archivos: d.code.changeMap.length, identificadores_safe_harbor: 18 }, { detectados: pr.detections.length, por_ubicacion: byWhere }, 900));
+    pt.push(llm("privacy", 1, "Clasifica las detecciones y descarta falsos positivos", 4800, 600));
+    pt.push(tool("privacy", "map_hipaa_safeguards", { norma: "45 CFR 164.312" }, Object.fromEntries(pr.safeguards.map((x) => [x.id, x.status])), 700));
+    const serious = pr.findings.find((f) => f.severity === "critica" || f.severity === "alta");
+    if (hasCode && serious?.file) {
+      pt.push(msg("privacy", "code", "info_request", `¿${serious.file}${serious.line ? `:${serious.line}` : ""} se despliega o solo se usa en pruebas?`));
+      pt.push(msg("code", "privacy", "info_response", /test|fixture/i.test(serious.file) ? "Solo en pruebas, pero el archivo está versionado en el repositorio." : "Se despliega: forma parte del código de producción.", 1100));
+    }
+    pt.push(tool("privacy", "check_minimum_necessary", {}, { resultado: pr.minimumNecessary.length > 90 ? `${pr.minimumNecessary.slice(0, 90)}…` : pr.minimumNecessary }, 600));
+    pt.push(llm("privacy", 2, "Redacta hallazgos por salvaguarda", 5200, 1100));
+    if (pr.detections.length) pt.push({ gap: 250, type: "guardrail_applied", agent: "privacy", title: "Valores de PHI excluidos de la salida", detail: `${pr.detections.length} identificador(es) reportados solo por tipo, archivo y línea.` });
+    if (atRisk.length) pt.push({ gap: 250, type: "guardrail_applied", agent: "privacy", title: "Salvaguardas en riesgo", detail: atRisk.map((x) => SAFEGUARD_LABEL[x.id]).join(" · ") });
+    pt.push({ gap: 200, type: "agent_completed", agent: "privacy", title: `${pr.detections.length} identificador(es) · ${atRisk.length} salvaguarda(s) en riesgo` });
+    all.push(...pt.events);
+    parEnd = Math.max(parEnd, pt.t);
+  }
+
   // ------------------------------------------------------------ 4. VTR
-  const vt = new Track(parEnd);
+  const vt = new Track(parEnd, dlp);
   if (on("vtr")) {
     vt.push(msg("orchestrator", "vtr", "task_request", "Generar VTR con los resultados disponibles.", 300));
     vt.push({ gap: 300, type: "agent_started", agent: "vtr", title: "Generación del VTR iniciada" });

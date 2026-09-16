@@ -1,6 +1,10 @@
 // Tipos del dominio "revisión de requerimientos". Todo cuelga de un Requerimiento.
 
-export type AgentId = "orchestrator" | "code" | "tests" | "kiuwan" | "sql" | "uiux" | "vtr" | "verdict";
+// "chat" es el asistente de consulta: no participa en el flujo de la revisión, pero se gobierna igual que los demás.
+export type AgentId = "orchestrator" | "code" | "tests" | "kiuwan" | "sql" | "uiux" | "privacy" | "vtr" | "verdict" | "chat";
+
+/** ¿El requerimiento puede tocar información de salud protegida (PHI)? "desconocido" se trata como "si". */
+export type PhiClassification = "si" | "no" | "desconocido";
 
 export type ProviderId = "openrouter" | "anthropic" | "mock";
 
@@ -64,6 +68,8 @@ export interface RepoInfo {
   filesTruncated: boolean;
   languages: Record<string, number>;
   findings: Finding[];
+  phiDetections: PhiDetection[];
+  phiSignals: string[]; // rutas o términos del diff que sugieren PHI (fhir, patient, hl7…)
   fetchedAt: string;
 }
 
@@ -90,6 +96,8 @@ export interface Requirement {
   owner: string;
   createdAt: string;
   scenario: ScenarioId;
+  phi: PhiClassification;
+  phiSetBy?: string;
   attachments: Attachment[];
   plan: Plan | null;
   runs: Run[];
@@ -107,6 +115,7 @@ export interface Run {
   enabledAgents: AgentId[];
   profiles: Record<AgentId, { provider: ProviderId; model: string; promptVersion: number }>;
   cancelledAt?: number;
+  signoff?: Signoff; // firma humana del dictamen
 }
 
 export type TraceEventType =
@@ -118,6 +127,7 @@ export type TraceEventType =
   | "guardrail_applied"
   | "agent_completed"
   | "agent_skipped"
+  | "phi_redacted"
   | "run_completed";
 
 export interface TraceEvent {
@@ -151,6 +161,7 @@ export interface Finding {
   line?: number;
   url?: string;
   suggestion?: string;
+  safeguard?: SafeguardId; // salvaguarda técnica HIPAA afectada (solo agente de privacidad)
 }
 
 export interface ChangeMapEntry {
@@ -241,6 +252,46 @@ export interface VtrReport {
   sections: VtrSection[];
 }
 
+// ------------------------------------------------------------------ privacidad HIPAA
+
+/** Salvaguardas técnicas de la regla de seguridad de HIPAA (45 CFR 164.312). */
+export type SafeguardId = "acceso" | "auditoria" | "integridad" | "autenticacion" | "transmision";
+
+/** Tipos de identificador de la lista Safe Harbor (45 CFR 164.514(b)(2)) que detecta el agente. */
+export type PhiIdentifier =
+  | "nombre"
+  | "fecha"
+  | "telefono"
+  | "email"
+  | "ssn"
+  | "historia_clinica"
+  | "afiliado"
+  | "direccion"
+  | "documento"
+  | "dato_paciente"; // variable con datos de paciente sin valor literal (logs, URL, navegador)
+
+export interface PhiDetection {
+  identifier: PhiIdentifier;
+  file: string;
+  line?: number;
+  where: "datos_prueba" | "log" | "sql" | "codigo" | "url" | "almacenamiento_local";
+  masked: string; // nunca el valor real
+  url?: string;
+}
+
+export interface SafeguardCheck {
+  id: SafeguardId;
+  status: "cumple" | "riesgo" | "sin_evidencia" | "no_aplica";
+  evidence: string;
+}
+
+export interface PrivacyReport {
+  detections: PhiDetection[];
+  safeguards: SafeguardCheck[];
+  minimumNecessary: string;
+  findings: Finding[];
+}
+
 export type Verdict = "APROBADO" | "APROBADO_CON_OBSERVACIONES" | "RECHAZADO";
 
 export interface VerdictReport {
@@ -258,6 +309,7 @@ export interface Deliverables {
   sql: SqlReport;
   uiux: UiuxReport;
   vtr: VtrReport;
+  privacy: PrivacyReport;
   verdict: VerdictReport;
 }
 
@@ -268,4 +320,124 @@ export interface AppUser {
   name: string;
   role: string;
   initials: string;
+  mfa: boolean;
+}
+
+// ------------------------------------------------------------------ gobierno de IA
+
+export type Permission =
+  | "crear_requerimiento"
+  | "ejecutar"
+  | "solicitar_cambio_agente"
+  | "aprobar_cambio_agente"
+  | "firmar_dictamen"
+  | "ver_auditoria";
+
+/** Configuración de un agente que se somete a control de cambios. */
+export interface ProfileSnapshot {
+  provider: ProviderId;
+  model: string;
+  temperature: number;
+  maxSteps: number;
+  systemPrompt: string;
+  taskPrompt: string;
+  promptVersion: number;
+}
+
+export interface EvalCaseResult {
+  caseId: string;
+  baseline: "paso" | "fallo";
+  candidate: "paso" | "fallo";
+  note: string;
+}
+
+export interface EvaluationResult {
+  runAt: string;
+  runBy: string;
+  results: EvalCaseResult[];
+  regressions: number;
+  improvements: number;
+  costDeltaPct: number;
+  latencyDeltaPct: number;
+  complianceBlockers: string[];
+}
+
+export type ChangeStatus = "pendiente" | "aprobada" | "rechazada" | "retirada";
+
+export interface ChangeRequest {
+  id: string;
+  agentId: AgentId;
+  createdBy: string;
+  createdAt: string;
+  justification: string;
+  before: ProfileSnapshot;
+  after: ProfileSnapshot;
+  status: ChangeStatus;
+  evaluation?: EvaluationResult;
+  review?: { by: string; at: string; comment: string };
+}
+
+export interface Signoff {
+  by: string;
+  at: string;
+  decision: "confirmado" | "modificado";
+  aiVerdict: Verdict;
+  finalVerdict: Verdict;
+  comment: string;
+}
+
+export type AuditAction =
+  | "requerimiento_creado"
+  | "clasificacion_phi"
+  | "ejecucion_iniciada"
+  | "ajuste_local"
+  | "cambio_solicitado"
+  | "cambio_evaluado"
+  | "cambio_aprobado"
+  | "cambio_rechazado"
+  | "cambio_retirado"
+  | "dictamen_firmado"
+  | "chat_consulta";
+
+export interface AuditEntry {
+  seq: number;
+  at: string;
+  actor: string;
+  action: AuditAction;
+  target: string;
+  detail: string;
+  prevHash: string;
+  hash: string;
+}
+
+// ------------------------------------------------------------------ asistente de consulta
+
+/** Enlace a la evidencia que respalda una respuesta del asistente. */
+export interface ChatCitation {
+  label: string;
+  tab?: string; // pestaña del requerimiento a la que saltar
+  url?: string; // enlace externo (GitHub)
+}
+
+export interface ChatAction {
+  label: string;
+  tab?: string;
+  href?: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  at: string;
+  author?: string; // usuario que preguntó
+  agentScope?: AgentId; // si la pregunta se hizo desde el panel de un agente
+  text: string;
+  citations?: ChatCitation[];
+  actions?: ChatAction[];
+  tokensIn?: number;
+  tokensOut?: number;
+  costUsd?: number;
+  /** Identificadores de PHI que la pasarela redactó del contexto enviado. */
+  redactedTypes?: string[];
+  fallback?: boolean; // el asistente no supo responder con los datos de la ejecución
 }

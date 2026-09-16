@@ -1,17 +1,18 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AGENTS, modelLabel } from "@/lib/rq/agents";
+import { AGENTS, AGENT_ORDER, modelLabel } from "@/lib/rq/agents";
 import type { RunView } from "@/lib/rq/derive";
 import { consolidatedFindings } from "@/lib/rq/scenarios";
 import { agentStats } from "@/lib/rq/simulator";
 import { useRq } from "@/lib/rq/store";
 import type { AgentId, Requirement } from "@/lib/rq/types";
+import ChatThread from "./chat/ChatThread";
 import EventRow from "./EventRow";
 import ProfileEditor from "./ProfileEditor";
 import { StatusDot, Tabs, VerdictBadge, fmtTokens, fmtUsd } from "./ui";
 
-type PanelTab = "actividad" | "resultado" | "configuracion";
+type PanelTab = "actividad" | "resultado" | "configuracion" | "preguntar";
 
 interface Props {
   req: Requirement;
@@ -28,6 +29,7 @@ const DELIVERABLE_TAB: Partial<Record<AgentId, string>> = {
   kiuwan: "kiuwan",
   sql: "sql",
   uiux: "uiux",
+  privacy: "privacidad",
   vtr: "vtr",
   verdict: "dictamen",
 };
@@ -84,6 +86,7 @@ export default function AgentPanel({ req, view, agentId, initialTab = "actividad
               { id: "actividad", label: "Actividad", badge: events.length ? <span className="chip chip-neutral">{events.length}</span> : undefined },
               { id: "resultado", label: "Resultado" },
               { id: "configuracion", label: "Modelo y prompt" },
+              { id: "preguntar", label: "Preguntar" },
             ]}
           />
         </header>
@@ -141,6 +144,12 @@ export default function AgentPanel({ req, view, agentId, initialTab = "actividad
             </div>
           )}
 
+          {tab === "preguntar" && (
+            <div className="h-full">
+              <ChatThread req={req} view={view} agentScope={agentId} onNavigate={onOpenDeliverable} compact />
+            </div>
+          )}
+
           {tab === "configuracion" && (
             <div className="p-4">
               <ProfileEditor
@@ -174,7 +183,7 @@ function ResultSummary({ agentId, view }: { agentId: AgentId; view: RunView | nu
       return (
         <div>
           {line("Agentes activos", view.run.enabledAgents.length)}
-          {line("Omitidos", 8 - view.run.enabledAgents.length)}
+          {line("Omitidos", AGENT_ORDER.length - view.run.enabledAgents.length)}
           {line("Estado", view.state.replace("_", " "))}
         </div>
       );
@@ -222,6 +231,14 @@ function ResultSummary({ agentId, view }: { agentId: AgentId; view: RunView | nu
           {line("Escenarios", d.uiux.scenarios.length)}
           {line("Fallan", d.uiux.scenarios.filter((s) => s.status === "fallo").length)}
           {line("Hallazgos", d.uiux.findings.length)}
+        </div>
+      );
+    case "privacy":
+      return (
+        <div>
+          {line("Identificadores de PHI", d.privacy.detections.length)}
+          {line("Salvaguardas en riesgo", `${d.privacy.safeguards.filter((x) => x.status === "riesgo").length}/${d.privacy.safeguards.length}`)}
+          {line("Hallazgos graves", d.privacy.findings.filter((f) => f.severity === "critica" || f.severity === "alta").length)}
         </div>
       );
     case "vtr":

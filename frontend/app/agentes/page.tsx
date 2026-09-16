@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import ProfileEditor from "@/components/rq/ProfileEditor";
-import { AGENTS, AGENT_ORDER, PROVIDER_LABELS, modelLabel } from "@/lib/rq/agents";
+import { AGENTS, ALL_AGENTS, PROVIDER_LABELS, modelLabel } from "@/lib/rq/agents";
 import { useRq } from "@/lib/rq/store";
 import type { AgentId } from "@/lib/rq/types";
 
 export default function AgentsPage() {
-  const { profiles, requirements, setLocation } = useRq();
-  const [selected, setSelected] = useState<AgentId>("code");
+  return (
+    <Suspense fallback={null}>
+      <Agents />
+    </Suspense>
+  );
+}
+
+function Agents() {
+  const params = useSearchParams();
+  const { profiles, requirements, setLocation, changeRequests } = useRq();
+  const initial = ALL_AGENTS.includes((params.get("agent") ?? "") as AgentId) ? (params.get("agent") as AgentId) : "code";
+  const [selected, setSelected] = useState<AgentId>(initial);
 
   useEffect(() => setLocation({ page: "agentes" }), [setLocation]);
 
@@ -26,7 +37,7 @@ export default function AgentsPage() {
 
       <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
         <ul className="panel divide-y divide-line self-start">
-          {AGENT_ORDER.map((id) => {
+          {ALL_AGENTS.map((id) => {
             const p = profiles[id];
             const a = AGENTS[id];
             const ov = overrides(id);
@@ -44,6 +55,9 @@ export default function AgentsPage() {
                       {!a.optional && <span className="chip chip-neutral">fijo</span>}
                       <span className="ml-auto font-mono text-[10.5px] text-ink-400">v{p.promptVersion}</span>
                     </span>
+                    {changeRequests.some((c) => c.agentId === id && c.status === "pendiente") && (
+                      <span className="chip border-warn/30 bg-warn-soft text-warn">solicitud pendiente</span>
+                    )}
                     <span className="block truncate font-mono text-[11px] text-ink-500">
                       {PROVIDER_LABELS[p.provider]} · {modelLabel(p.provider, p.model)}
                     </span>

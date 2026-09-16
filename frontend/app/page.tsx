@@ -3,18 +3,21 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { PHI_POLICY, PhiBadge, PhiSelector } from "@/components/rq/PhiControl";
 import { AgentChip, Avatar, VerdictBadge, fmtDate } from "@/components/rq/ui";
 import { REQ_STATUS_LABELS, latestRun, requirementStatus, runView, type RequirementStatus } from "@/lib/rq/derive";
+import { can, missingPermissionText } from "@/lib/rq/governance";
 import { USERS } from "@/lib/rq/mockData";
 import { ATTACHMENT_LABELS } from "@/lib/rq/planner";
 import { useNow, useRq } from "@/lib/rq/store";
-import type { AttachmentKind } from "@/lib/rq/types";
+import type { AttachmentKind, PhiClassification } from "@/lib/rq/types";
 
 const STATUS_CLASS: Record<RequirementStatus, string> = {
   borrador: "chip-neutral",
   planificado: "border-info/30 bg-info-soft text-info",
   en_curso: "border-violet/30 bg-violet-soft text-violet",
   completado: "border-ok/30 bg-ok-soft text-ok",
+  pendiente_firma: "border-warn/30 bg-warn-soft text-warn",
   cancelado: "border-line bg-sunken text-ink-500",
 };
 
@@ -22,7 +25,8 @@ const KINDS: AttachmentKind[] = ["repo", "vtr_template", "kiuwan_csv", "sql"];
 const KIND_SHORT: Record<AttachmentKind, string> = { repo: "git", vtr_template: "VTR", kiuwan_csv: "Kiuwan", sql: "SQL" };
 
 export default function RequirementsPage() {
-  const { requirements, createRequirement, setLocation } = useRq();
+  const { requirements, createRequirement, setLocation, currentUserId } = useRq();
+  const canCreate = can(USERS.find((u) => u.id === currentUserId), "crear_requerimiento");
   const router = useRouter();
   const now = useNow(true, 1000);
   const [creating, setCreating] = useState(false);
@@ -52,7 +56,7 @@ export default function RequirementsPage() {
             placeholder="Buscar por código o título…"
             className="w-56 rounded-lg border border-line bg-surface px-3 py-2 text-[13px] outline-none focus:border-accent"
           />
-          <button className="btn-primary" onClick={() => setCreating((v) => !v)}>
+          <button className="btn-primary" onClick={() => setCreating((v) => !v)} disabled={!canCreate && !creating} title={!canCreate ? missingPermissionText("crear_requerimiento") : undefined}>
             {creating ? "Cancelar" : "Nuevo requerimiento"}
           </button>
         </div>
@@ -91,7 +95,10 @@ export default function RequirementsPage() {
                 <tr key={r.id} className="cursor-pointer transition hover:bg-sunken/60" onClick={() => router.push(`/requerimiento?id=${r.id}`)}>
                   <td className="px-4 py-3">
                     <Link href={`/requerimiento?id=${r.id}`} className="block" onClick={(e) => e.stopPropagation()}>
-                      <span className="font-mono text-[11.5px] text-accent">{r.id}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-mono text-[11.5px] text-accent">{r.id}</span>
+                        <PhiBadge phi={r.phi} />
+                      </span>
                       <span className="block font-medium text-ink-900">{r.title}</span>
                       <span className="text-[11.5px] text-ink-400">creado {fmtDate(r.createdAt)}</span>
                     </Link>
@@ -153,19 +160,20 @@ export default function RequirementsPage() {
   );
 }
 
-function NewRequirementForm({ onCreate }: { onCreate: (i: { title: string; description: string; criteria: string[] }) => void }) {
+function NewRequirementForm({ onCreate }: { onCreate: (i: { title: string; description: string; criteria: string[]; phi: PhiClassification }) => void }) {
+  const [phi, setPhi] = useState<PhiClassification | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [criteria, setCriteria] = useState("");
   const list = criteria.split("\n").map((c) => c.trim()).filter(Boolean);
-  const valid = title.trim().length > 3 && description.trim().length > 10;
+  const valid = title.trim().length > 3 && description.trim().length > 10 && phi !== null;
 
   return (
     <form
       className="panel grid gap-4 p-4 md:grid-cols-2"
       onSubmit={(e) => {
         e.preventDefault();
-        if (valid) onCreate({ title: title.trim(), description: description.trim(), criteria: list });
+        if (valid && phi) onCreate({ title: title.trim(), description: description.trim(), criteria: list, phi });
       }}
     >
       <div className="space-y-3">
@@ -201,8 +209,20 @@ function NewRequirementForm({ onCreate }: { onCreate: (i: { title: string; descr
             className="mt-1 w-full rounded-lg border border-line bg-surface px-3 py-2 text-[13px] outline-none focus:border-accent"
           />
         </label>
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[12px] text-ink-500">Después podrás adjuntar el repositorio, la plantilla VTR, el CSV de Kiuwan y los SQL.</span>
+      </div>
+      <div className="space-y-2 md:col-span-2">
+        <PhiSelector value={phi} onChange={setPhi} />
+        {phi && phi !== "no" && (
+          <ul className="grid gap-x-4 gap-y-0.5 rounded-lg border border-teal/20 bg-teal-soft/50 px-3 py-2 text-[12px] leading-5 text-teal sm:grid-cols-2">
+            {PHI_POLICY.map((p) => (
+              <li key={p}>• {p}</li>
+            ))}
+          </ul>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
+          <span className="text-[12px] text-ink-500">
+            {phi === null ? "Indica si puede tocar PHI para poder crear el requerimiento." : "Después podrás adjuntar el repositorio, la plantilla VTR, el CSV de Kiuwan y los SQL."}
+          </span>
           <button type="submit" className="btn-primary" disabled={!valid}>
             Crear
           </button>

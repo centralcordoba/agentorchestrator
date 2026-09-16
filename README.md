@@ -49,8 +49,10 @@ Requerimiento (REQ-1042: título, descripción, criterios de aceptación)
 | **Kiuwan** | Analiza el CSV de Kiuwan adjunto, prioriza defectos y detecta falsos positivos consultando a Código | Sí |
 | **SQL** | Revisa scripts y consultas: rendimiento, seguridad y reversibilidad | Sí |
 | **UI/UX** | Diseña y ejecuta escenarios Playwright sobre las pantallas afectadas | Sí |
+| **Privacidad HIPAA** | Busca PHI (datos de paciente) en código, datos de prueba, logs, SQL y URLs, y evalúa las salvaguardas técnicas 45 CFR 164.312 | Solo si el requerimiento está clasificado sin PHI |
 | **VTR** | **Genera** el documento VTR rellenando la plantilla modelo con lo que produjeron los demás | Sí |
 | **Dictamen** | Consolida hallazgos sin duplicados, aplica umbrales y emite `APROBADO`, `APROBADO CON OBSERVACIONES` o `RECHAZADO` | No |
+| **Asistente de consulta** | Responde preguntas sobre una revisión ya ejecutada citando la evidencia. No participa en el flujo: solo lee | — |
 
 Orden de ejecución:
 
@@ -61,29 +63,39 @@ flowchart LR
     C --> K[Kiuwan]
     C --> S[SQL]
     C --> U[UI/UX]
+    C --> P[Privacidad]
     T --> V[VTR]
     K --> V
     S --> V
     U --> V
+    P --> V
     V --> D[Dictamen]
     K -. consulta directa .-> C
     T -. consulta directa .-> C
 ```
 
-Tests, Kiuwan, SQL y UI/UX trabajan **en paralelo** una vez que Código entrega el mapa del cambio.
+Tests, Kiuwan, SQL, UI/UX y Privacidad trabajan **en paralelo** una vez que Código entrega el mapa del cambio.
+
+Al crear un requerimiento hay que clasificarlo: **¿puede tocar PHI?** Con «Sí» (o «No lo sé») se activa la política de PHI:
+Privacidad pasa a ser obligatorio, los identificadores de paciente se redactan antes de cada llamada al modelo, el dictamen no
+puede ser «Aprobado» sin esa revisión y el VTR incluye la sección «Impacto en PHI y controles HIPAA».
 
 ### Pantallas
 
 | Ruta | Contenido |
 |---|---|
 | `/` | Lista de requerimientos (adjuntos, agentes, estado, dictamen) y alta de uno nuevo |
-| `/requerimiento?id=REQ-…` | Detalle por pestañas: **Requerimiento** (definición y adjuntos) · **Plan de agentes** · **Ejecución** (grafo en vivo, traza, consumo) · **Código y Tests** · **Kiuwan** · **SQL** · **UI/UX** · **VTR** · **Dictamen** |
+| `/requerimiento?id=REQ-…` | Detalle por pestañas: **Requerimiento** (definición, clasificación PHI y adjuntos) · **Plan de agentes** · **Ejecución** (grafo en vivo, traza, consumo) · **Código y Tests** · **Kiuwan** · **SQL** · **UI/UX** · **Privacidad** · **VTR** · **Dictamen** (con firma humana) |
 | `/agentes` | Configuración predeterminada de cada agente: proveedor, modelo, temperatura, pasos máximos y prompt con versiones |
-| `/monitor` | Usuarios en línea y dónde están, agentes trabajando ahora, llamadas, tokens, guardarraíles y coste del día |
+| `/gobierno` | Solicitudes de cambio de agentes (diff, evaluación de regresión y aprobación a cuatro ojos), fichas de agentes y registro de auditoría |
+| `/monitor` | **Actividad**: usuarios en línea, agentes trabajando, llamadas, tokens y coste · **Cumplimiento HIPAA**: alertas, requerimientos con PHI, salvaguardas y proveedores con BAA |
 | `/demo-bolsa` | Demo anterior (necesita el backend) |
 
-Al **hacer clic en un agente** del grafo se abre un panel con tres pestañas: **Actividad** (qué está haciendo, paso N/M,
-llamadas al modelo, herramientas con argumentos y resultado, mensajes, guardarraíles), **Resultado** y **Modelo y prompt**.
+Al **hacer clic en un agente** del grafo se abre un panel con cuatro pestañas: **Actividad** (qué está haciendo, paso N/M,
+llamadas al modelo, herramientas con argumentos y resultado, mensajes, guardarraíles), **Resultado**, **Modelo y prompt** y
+**Preguntar** (el asistente, limitado a ese agente).
+
+El botón **Preguntar al asistente** abre un panel lateral con el asistente para todo el requerimiento.
 
 ---
 
@@ -343,7 +355,54 @@ Los *patch* no se guardan: solo los hallazgos y la lista de archivos, para no ll
 Cada pestaña lo indica con un aviso verde (*datos reales*) o amarillo (*ejemplo simulado*). Los entregables de ejemplo
 provienen de dos escenarios en `lib/rq/scenarios.ts` (`pagos`: Java/Oracle; `portal`: Next.js/.NET).
 
-### 6.7 Dictamen
+### 6.7 Privacidad y PHI (`lib/rq/privacy.ts`)
+
+El agente de Privacidad aplica reglas deterministas sobre las líneas añadidas del diff: SSN, número de historia clínica, fecha de
+nacimiento, número de afiliado, datos de paciente en logs o en parámetros de URL, PHI en `localStorage`, TLS desactivado y HTTP sin
+cifrar. **Nunca guarda ni muestra el valor detectado**: informa tipo, archivo y línea. Cada hallazgo se asocia a una salvaguarda de
+45 CFR 164.312 (acceso, auditoría, integridad, autenticación, transmisión), que la pestaña Privacidad muestra como «en riesgo»,
+«sin evidencia» o «cumple». En requerimientos con PHI, la traza incluye eventos `phi_redacted` de la pasarela DLP antes de cada
+llamada al modelo, con el recuento por tipo y si el proveedor tiene BAA.
+
+### 6.8 Gobierno de IA (`lib/rq/governance.ts`)
+
+- **Roles y permisos:** crear requerimientos, ejecutar, solicitar cambios, aprobarlos, firmar dictámenes y ver la auditoría.
+- **Control de cambios:** editar la configuración **predeterminada** de un agente no la cambia: crea una solicitud (`CR-00X`) con
+  justificación. La revisión exige permiso, **cuatro ojos** (no puede aprobar quien la propuso), **evaluación de regresión**
+  ejecutada y ausencia de bloqueos de cumplimiento (por ejemplo, mover a un proveedor sin BAA un agente que recibe PHI).
+- **Evaluación de regresión:** 6 casos fijos; compara la versión actual con la propuesta y calcula regresiones, mejoras y variación
+  de coste y latencia. Simulada con heurísticas explicables (más temperatura → resultados inestables; prompt recortado → pierde las citas).
+- **Ajustes por requerimiento:** se aplican al momento, quedan auditados y avisan si el proveedor no tiene BAA.
+- **Fichas de agente:** responsable, datos a los que accede, herramientas, límites y si recibe PHI redactada.
+- **Auditoría:** registro de solo escritura donde cada entrada encadena el hash de la anterior; la interfaz verifica la cadena.
+
+### 6.9 Firma del dictamen
+
+El dictamen de la IA es una recomendación. Una persona con permiso y **distinta de quien lanzó la ejecución** lo confirma o lo
+cambia con justificación (obligatoria en requerimientos con PHI). Hasta entonces el requerimiento aparece como «Pendiente de firma».
+
+### 6.10 Panel de cumplimiento (`lib/rq/compliance.ts`)
+
+Deriva del estado real: exposiciones críticas de PHI, requerimientos con PHI ejecutados sin Privacidad, agentes con contexto de PHI
+en proveedores sin BAA, dictámenes sin firmar, cambios pendientes, usuarios sin MFA y requerimientos sin clasificar. Incluye el
+resumen agregado de las salvaguardas 164.312 y el estado de BAA por proveedor.
+
+### 6.11 Asistente de consulta (`lib/rq/chat.ts`)
+
+Panel lateral dentro del requerimiento y pestaña «Preguntar» en el panel de cada agente: el mismo componente con el contexto
+anclado (chips que muestran qué datos ve: ejecución, hallazgos, eventos, diff y si hay PHI redactada).
+
+- **Responde con los datos de la ejecución** (dictamen, hallazgos por prioridad, privacidad, pruebas, Kiuwan, SQL, UI/UX, VTR,
+  coste y estado de la firma) y **cita la evidencia**: cada cita salta a la pestaña correspondiente o al archivo en GitHub.
+- Si la pregunta se sale de los datos, **lo dice** en vez de suponerlo.
+- **Solo lectura:** propone acciones y navega, pero no firma dictámenes ni aprueba cambios.
+- **Pasarela DLP en el cuadro de texto:** si escribes datos de paciente (SSN, historia clínica, afiliado, fecha de nacimiento,
+  teléfono, email o documento), el envío se bloquea y se explica por qué.
+- Se gobierna como un agente más: ficha, modelo y prompt versionado en `/agentes` y `/gobierno`, coste por conversación y una
+  entrada en la auditoría por consulta (metadatos y tokens, **no** el texto de la pregunta).
+- En el prototipo las respuestas se construyen con reglas sobre los datos reales de la ejecución, sin LLM.
+
+### 6.12 Dictamen
 
 `consolidatedFindings()` junta los hallazgos de los agentes completados y elimina duplicados por archivo y línea.
 `buildVerdict()` aplica reglas explícitas, visibles en la pestaña Dictamen:
@@ -354,6 +413,8 @@ provienen de dos escenarios en `lib/rq/scenarios.ts` (`pagos`: Java/Oracle; `por
 | **G1** | Algún hallazgo crítico → `RECHAZADO` |
 | **G2** | Pruebas fallidas → como máximo `APROBADO CON OBSERVACIONES` |
 | **G3** | Agentes clave desactivados → confianza limitada a 0,6 |
+| **G4** | Exposición crítica de PHI detectada por Privacidad → corregir y avisar al responsable de privacidad |
+| **G5** | Requerimiento con PHI sin revisión de Privacidad → no puede ser `APROBADO`, confianza 0,5 |
 
 Sin críticos, altos ni pruebas fallidas → `APROBADO`.
 
@@ -386,6 +447,7 @@ frontend/
     page.tsx                   lista y alta de requerimientos
     requerimiento/page.tsx     detalle por pestañas (?id=…&tab=…)
     agentes/page.tsx           configuración global de agentes
+    gobierno/page.tsx          control de cambios, fichas y auditoría
     monitor/page.tsx           panel de usuarios y agentes
     demo-bolsa/page.tsx        demo anterior
     layout.tsx · globals.css
@@ -397,10 +459,16 @@ frontend/
       ProfileEditor.tsx        editor de modelo, parámetros y prompts versionados
       RepoConnector.tsx        conexión con GitHub y tarjeta del repositorio
       EventRow.tsx · ui.tsx    fila de traza y componentes base
-      tabs/                    Requirement, Plan, Execution y entregables
+      tabs/                    Requirement, Plan, Execution, Privacy y entregables
+      governance/              solicitudes de cambio, fichas de agentes y auditoría
+      monitor/                 panel de cumplimiento
+      chat/                    asistente de consulta (panel lateral y pestaña del agente)
+      PhiControl.tsx           clasificación PHI y distintivos
+      SignoffPanel.tsx         firma humana del dictamen
     (resto)                    componentes de la demo anterior
   lib/
-    rq/                        types, agents, store, planner, simulator, scenarios, github, derive, monitor, mockData
+    rq/                        types, agents, store, planner, simulator, scenarios, github, diff, privacy,
+                               governance, compliance, chat, derive, monitor, mockData
     (resto)                    cliente de la demo anterior
   scripts/build-static.mjs     export estático a frontend/out
   out/                         build estático versionado (lo sirve FastAPI)
@@ -458,7 +526,9 @@ API principal: `POST /api/runs`, `GET /api/runs`, `GET /api/runs/{id}`, `GET /ap
 2. **Formatos reales**: plantilla VTR en `doc/vtr` (generación con python-docx) y CSV de ejemplo de Kiuwan en `doc/kiwuan`.
 3. **Pruebas reales**: ejecutar las pruebas generadas en un contenedor o microVM desechable, sin red.
 4. **UI/UX real**: Playwright contra la aplicación del requerimiento, con dominios restringidos.
-5. **Seguridad del uso de IA** (el uso previsto es con código real de la empresa): proveedor con retención cero o
-   contrato empresarial, eliminación de secretos antes de enviar contexto al modelo, registro de auditoría de lo enviado,
-   y herramientas de ejecución acotadas (candidatas evaluadas: CallScript, just-bash, run, emulate, deepsec).
+5. **Seguridad y cumplimiento del uso de IA** (el uso previsto es con código real de una empresa de salud sujeta a HIPAA).
+   El prototipo ya diseña la parte visible: clasificación PHI, agente de Privacidad, redacción antes de llamar al modelo,
+   control de cambios con cuatro ojos, firma del dictamen, auditoría encadenada y panel de cumplimiento. Falta el respaldo real:
+   proveedor con BAA y retención cero, SSO con MFA, cifrado y fin del almacenamiento en el navegador, auditoría en el servidor
+   exportable a SIEM, y herramientas de ejecución acotadas (candidatas evaluadas: CallScript, just-bash, run, emulate, deepsec).
 6. Repositorios privados y otros proveedores git (GitLab, Bitbucket, servidores internos) desde el backend.

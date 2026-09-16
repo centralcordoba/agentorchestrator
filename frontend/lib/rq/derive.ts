@@ -2,13 +2,14 @@ import { deliverablesFor } from "./scenarios";
 import { completedAgents, runState, visibleEvents, type RunState } from "./simulator";
 import type { Deliverables, Requirement, Run, TraceEvent, Verdict } from "./types";
 
-export type RequirementStatus = "borrador" | "planificado" | RunState;
+export type RequirementStatus = "borrador" | "planificado" | RunState | "pendiente_firma";
 
 export const REQ_STATUS_LABELS: Record<RequirementStatus, string> = {
   borrador: "Borrador",
   planificado: "Planificado",
   en_curso: "En ejecución",
-  completado: "Completado",
+  completado: "Firmado",
+  pendiente_firma: "Pendiente de firma",
   cancelado: "Cancelado",
 };
 
@@ -18,7 +19,10 @@ export function latestRun(req: Requirement): Run | undefined {
 
 export function requirementStatus(req: Requirement, now: number): RequirementStatus {
   const run = latestRun(req);
-  if (run) return runState(req, run, now);
+  if (run) {
+    const state = runState(req, run, now);
+    return state === "completado" && !run.signoff ? "pendiente_firma" : state;
+  }
   return req.plan ? "planificado" : "borrador";
 }
 
@@ -36,5 +40,5 @@ export function runView(req: Requirement, run: Run, now: number): RunView {
   const completed = completedAgents(events);
   const deliverables = deliverablesFor(req, completed);
   const state = runState(req, run, now);
-  return { run, events, state, deliverables, completed, verdict: completed.includes("verdict") ? deliverables.verdict.verdict : null };
+  return { run, events, state, deliverables, completed, verdict: completed.includes("verdict") ? run.signoff?.finalVerdict ?? deliverables.verdict.verdict : null };
 }

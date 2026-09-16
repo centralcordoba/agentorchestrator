@@ -5,9 +5,10 @@ import { AGENTS } from "@/lib/rq/agents";
 import type { RunView } from "@/lib/rq/derive";
 import { SEVERITY_LABELS, consolidatedFindings, sortFindings } from "@/lib/rq/scenarios";
 import type { AgentId, Requirement, Severity } from "@/lib/rq/types";
+import SignoffPanel from "../SignoffPanel";
 import { AgentChip, EmptyState, FindingList, SeverityBadge, SourceNote, Stat, VerdictBadge, fmtDuration } from "../ui";
 
-function Gate({ view, agent, children }: { view: RunView | null; agent: AgentId; children: React.ReactNode }) {
+export function Gate({ view, agent, children }: { view: RunView | null; agent: AgentId; children: React.ReactNode }) {
   if (!view) return <EmptyState title="Sin ejecuciones">Ejecuta la revisión para ver este entregable.</EmptyState>;
   if (!view.run.enabledAgents.includes(agent))
     return <EmptyState title={`${AGENTS[agent].label} no se ejecutó`}>El agente estaba desactivado en esta ejecución. Actívalo en el plan y vuelve a ejecutar.</EmptyState>;
@@ -357,13 +358,15 @@ export function VtrTab({ view }: { view: RunView | null }) {
 }
 
 // ------------------------------------------------------------------ Dictamen
-export function VerdictTab({ view }: { view: RunView | null }) {
+export function VerdictTab({ req, view }: { req: Requirement; view: RunView | null }) {
   return (
     <Gate view={view} agent="verdict">
       {view && (
         <div className="space-y-4">
+          <SignoffPanel req={req} view={view} />
           <section className="panel space-y-3 p-5">
             <div className="flex flex-wrap items-center gap-3">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">Recomendación de la IA</span>
               <VerdictBadge verdict={view.deliverables.verdict.verdict} large />
               <span className="font-mono text-[12px] text-ink-500">confianza {Math.round(view.deliverables.verdict.confidence * 100)} %</span>
             </div>

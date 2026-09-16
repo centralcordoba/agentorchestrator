@@ -1,6 +1,7 @@
 // Sugerencia de plan del orquestador (simulada en el frontend) y avisos antes de ejecutar.
 import { AGENTS, AGENT_ORDER } from "./agents";
 import { FRONTEND_FILE } from "./github";
+import { handlesPhi } from "./privacy";
 import type { AgentId, AttachmentKind, Plan, PlanItem, Requirement } from "./types";
 
 const UI_WORDS = ["pantalla", "formulario", "portal", "web", "interfaz", "botón", "vista", "frontend", "ui"];
@@ -53,6 +54,14 @@ export function suggestPlan(req: Requirement): Plan {
           ? { agentId, suggested: true, enabled: true, reason: `El requerimiento menciona «${w}»: se probarán las pantallas con Playwright.` }
           : { agentId, suggested: false, enabled: false, reason: "El requerimiento no menciona pantallas." };
       }
+      case "privacy": {
+        if (req.phi === "si") return { agentId, suggested: true, enabled: true, reason: "Obligatorio: el requerimiento está clasificado con PHI." };
+        if (req.phi === "desconocido") return { agentId, suggested: true, enabled: true, reason: "Obligatorio mientras no se confirme que el requerimiento no toca PHI." };
+        const signals = real?.phiSignals.length ?? 0;
+        return signals
+          ? { agentId, suggested: true, enabled: true, reason: `Clasificado sin PHI, pero el diff toca rutas de datos de salud (${real!.phiSignals.slice(0, 2).join(", ")}).` }
+          : { agentId, suggested: false, enabled: false, reason: "Clasificado sin PHI y sin señales de datos de salud en el diff." };
+      }
       case "vtr":
         return has(req, "vtr_template")
           ? { agentId, suggested: true, enabled: true, reason: "Hay plantilla VTR: se generará el documento." }
@@ -74,6 +83,9 @@ export function planWarnings(req: Requirement, plan: Plan): PlanWarning[] {
   const on = new Set(plan.items.filter((i) => i.enabled).map((i) => i.agentId));
   const out: PlanWarning[] = [];
   const need: Partial<Record<AgentId, AttachmentKind>> = { code: "repo", tests: "repo", kiuwan: "kiuwan_csv", vtr: "vtr_template" };
+  if (handlesPhi(req) && !on.has("privacy")) {
+    out.push({ agentId: "privacy", level: "bloqueo", text: "Privacidad HIPAA es obligatorio para requerimientos con PHI (o sin clasificar)." });
+  }
   for (const id of on) {
     const kind = need[id];
     if (kind && !has(req, kind)) {
@@ -86,6 +98,12 @@ export function planWarnings(req: Requirement, plan: Plan): PlanWarning[] {
     }
   }
   return out;
+}
+
+/** El agente no se puede desactivar en este requerimiento (y por qué). */
+export function lockedReason(req: Requirement, agentId: AgentId): string | null {
+  if (agentId === "privacy" && handlesPhi(req)) return req.phi === "si" ? "Obligatorio: requerimiento con PHI" : "Obligatorio hasta clasificar el requerimiento";
+  return null;
 }
 
 export const ATTACHMENT_LABELS: Record<AttachmentKind, string> = {

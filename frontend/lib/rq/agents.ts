@@ -3,6 +3,7 @@ import type { AgentId, AgentProfile, ProviderId } from "./types";
 export interface AgentDef {
   id: AgentId;
   label: string;
+  nodeLabel?: string; // etiqueta corta para el grafo
   short: string;
   role: string;
   color: string;
@@ -13,7 +14,11 @@ export interface AgentDef {
   outputContract: string;
 }
 
-export const AGENT_ORDER: AgentId[] = ["orchestrator", "code", "tests", "kiuwan", "sql", "uiux", "vtr", "verdict"];
+/** Agentes del flujo de revisión, en orden de ejecución (el asistente de chat no participa). */
+export const AGENT_ORDER: AgentId[] = ["orchestrator", "code", "tests", "kiuwan", "sql", "uiux", "privacy", "vtr", "verdict"];
+
+/** Todos los agentes gobernados: los del flujo más el asistente de consulta. */
+export const ALL_AGENTS: AgentId[] = [...AGENT_ORDER, "chat"];
 
 export const AGENTS: Record<AgentId, AgentDef> = {
   orchestrator: {
@@ -107,6 +112,24 @@ export const AGENTS: Record<AgentId, AgentDef> = {
   "findings": [...]
 }`,
   },
+  privacy: {
+    id: "privacy",
+    label: "Privacidad HIPAA",
+    nodeLabel: "Privacidad",
+    short: "PHI",
+    role: "Busca PHI en el código, los datos de prueba, los logs y el SQL, y evalúa las salvaguardas técnicas de HIPAA (164.312) que toca el cambio.",
+    color: "#0F6E6E",
+    soft: "#E2F0EF",
+    optional: true,
+    dependsOn: ["code"],
+    tools: ["scan_phi_identifiers", "map_hipaa_safeguards", "check_minimum_necessary"],
+    outputContract: `{
+  "detections": [{ "identifier", "file", "line", "where" }],   // nunca el valor
+  "safeguards": [{ "id", "status", "evidence" }],
+  "minimum_necessary": string,
+  "findings": [{ "severity", "safeguard", "file", "line" }]
+}`,
+  },
   vtr: {
     id: "vtr",
     label: "VTR",
@@ -119,6 +142,23 @@ export const AGENTS: Record<AgentId, AgentDef> = {
     tools: ["read_vtr_template", "fill_section", "render_docx"],
     outputContract: `{
   "sections": [{ "title", "status", "content", "sources": AgentId[] }]
+}`,
+  },
+  chat: {
+    id: "chat",
+    label: "Asistente de consulta",
+    nodeLabel: "Asistente",
+    short: "CHAT",
+    role: "Responde preguntas sobre una revisión ya ejecutada citando hallazgos, eventos y archivos. Solo lee: no firma dictámenes ni aprueba cambios.",
+    color: "#4A5A6A",
+    soft: "#E9EDF1",
+    optional: true,
+    dependsOn: [],
+    tools: ["get_findings", "get_trace", "get_diff_file", "get_vtr_section"],
+    outputContract: `{
+  "answer": string,
+  "citations": [{ "kind", "label", "ref" }],   // toda afirmación citada
+  "suggested_actions": [{ "label", "target" }] // el usuario confirma; el asistente no ejecuta
 }`,
   },
   verdict: {
@@ -163,6 +203,12 @@ export const PROVIDER_LABELS: Record<ProviderId, string> = {
   mock: "Mock",
 };
 
+/**
+ * ¿El proveedor tiene un acuerdo BAA firmado con la organización? En el prototipo es una suposición de diseño:
+ * Claude API con organización configurada para HIPAA; OpenRouter no publica BAA.
+ */
+export const PROVIDER_BAA: Record<ProviderId, boolean | null> = { anthropic: true, openrouter: false, mock: null };
+
 export function modelInfo(provider: ProviderId, model: string) {
   return MODEL_CATALOG[provider].find((m) => m.id === model) ?? { id: model, label: model, inPerM: 0, outPerM: 0 };
 }
@@ -184,8 +230,12 @@ const SYSTEM_PROMPTS: Record<AgentId, string> = {
     "Eres un DBA. Revisa los scripts y consultas SQL del cambio. Señala riesgos de rendimiento (índices, planes), seguridad (inyección, permisos) y reversibilidad (scripts de rollback).",
   uiux:
     "Eres un especialista en UI/UX y pruebas end-to-end. Diseña escenarios Playwright para las pantallas afectadas, ejecútalos y evalúa usabilidad, consistencia visual y accesibilidad (WCAG AA).",
+  privacy:
+    "Eres el responsable de privacidad de una empresa de salud sujeta a HIPAA. Revisa el cambio buscando información de salud protegida (PHI) en código, datos de prueba, logs, SQL, URLs y almacenamiento del navegador, usando los 18 identificadores de Safe Harbor. Evalúa cada salvaguarda técnica de 45 CFR 164.312 (acceso, auditoría, integridad, autenticación, transmisión) y el principio de mínimo necesario. Nunca repitas el valor de un identificador detectado: indica solo tipo, archivo y línea.",
   vtr:
     "Eres responsable de documentación. Rellena la plantilla VTR respetando exactamente su estructura. Cada afirmación debe provenir de lo que produjeron los demás agentes; si una sección no tiene fuente, márcala como parcial.",
+  chat:
+    "Eres un asistente que responde preguntas sobre una revisión de requerimiento ya ejecutada. Responde solo con lo que consta en la ejecución: hallazgos, traza, entregables y diff. Cita siempre la evidencia (hallazgo, evento, archivo y línea o sección del VTR). Si algo no está en los datos, dilo en vez de suponerlo. No repitas valores de PHI. No puedes firmar dictámenes ni aprobar cambios: propón la acción y deja que la persona la confirme.",
   verdict:
     "Eres el consolidador. Une los hallazgos de todos los agentes, elimina duplicados, aplica los umbrales de calidad y emite un dictamen con una justificación breve y verificable.",
 };
@@ -197,7 +247,9 @@ const TASK_PROMPTS: Record<AgentId, string> = {
   kiuwan: "CSV: {{kiuwan_csv}}\nMapa del cambio: {{mapa_cambio}}",
   sql: "Scripts: {{scripts_sql}}\nMotor: {{motor}}\nMapa del cambio: {{mapa_cambio}}",
   uiux: "Pantallas afectadas: {{pantallas}}\nURL base: {{url_base}}\nCriterios: {{criterios}}",
+  privacy: "Clasificación PHI: {{clasificacion_phi}}\nMapa del cambio: {{mapa_cambio}}\nScripts SQL: {{scripts_sql}}",
   vtr: "Plantilla: {{plantilla_vtr}}\nResultados: {{resultados_agentes}}",
+  chat: "Pregunta: {{pregunta}}\nContexto: {{requerimiento}} · ejecución {{ejecucion}} · {{alcance}}\nDatos disponibles: {{hallazgos}}, {{traza}}, {{entregables}}",
   verdict: "Hallazgos: {{hallazgos}}\nUmbrales: {{umbrales}}",
 };
 
@@ -208,13 +260,15 @@ const DEFAULT_MODEL: Record<AgentId, { provider: ProviderId; model: string; temp
   kiuwan: { provider: "openrouter", model: "google/gemini-3.5-flash-lite", temperature: 0.1, maxSteps: 6 },
   sql: { provider: "openrouter", model: "google/gemini-3.5-flash", temperature: 0.1, maxSteps: 6 },
   uiux: { provider: "openrouter", model: "google/gemini-3.5-flash", temperature: 0.2, maxSteps: 10 },
+  privacy: { provider: "anthropic", model: "claude-sonnet-5", temperature: 0.0, maxSteps: 8 },
   vtr: { provider: "openrouter", model: "google/gemini-3.5-flash-lite", temperature: 0.3, maxSteps: 8 },
   verdict: { provider: "openrouter", model: "anthropic/claude-sonnet-5", temperature: 0.0, maxSteps: 4 },
+  chat: { provider: "anthropic", model: "claude-sonnet-5", temperature: 0.2, maxSteps: 6 },
 };
 
 export function defaultProfiles(): Record<AgentId, AgentProfile> {
   const out = {} as Record<AgentId, AgentProfile>;
-  for (const id of AGENT_ORDER) {
+  for (const id of ALL_AGENTS) {
     const m = DEFAULT_MODEL[id];
     out[id] = {
       agentId: id,

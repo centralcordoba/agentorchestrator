@@ -6,6 +6,8 @@ import { ATTACHMENT_LABELS } from "@/lib/rq/planner";
 import { useRq } from "@/lib/rq/store";
 import { GitHubError, connectRepo, fetchRepoMeta, type CompareMode } from "@/lib/rq/github";
 import type { AttachmentKind, RepoInfo, Requirement } from "@/lib/rq/types";
+import { suggestPhi } from "@/lib/rq/privacy";
+import { PHI_POLICY, PhiSelector } from "../PhiControl";
 import { RepoCard, RepoConnector } from "../RepoConnector";
 import { Avatar, fmtDate } from "../ui";
 
@@ -27,7 +29,8 @@ function kb(bytes: number) {
 }
 
 export default function RequirementTab({ req, readOnly }: { req: Requirement; readOnly: boolean }) {
-  const { updateRequirement, addAttachment, removeAttachment } = useRq();
+  const { updateRequirement, addAttachment, removeAttachment, setPhi } = useRq();
+  const phiSuggestion = suggestPhi(req);
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(req.title);
   const [description, setDescription] = useState(req.description);
@@ -66,6 +69,45 @@ export default function RequirementTab({ req, readOnly }: { req: Requirement; re
   };
 
   return (
+    <div className="space-y-5">
+    <section className="panel" aria-labelledby="phi-title">
+      <div className="panel-title">
+        <span id="phi-title">Clasificación de datos</span>
+        {req.phiSetBy && (
+          <span className="normal-case tracking-normal text-ink-400">clasificado por {USERS.find((u) => u.id === req.phiSetBy)?.name ?? req.phiSetBy}</span>
+        )}
+      </div>
+      <div className="grid gap-4 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+        <div className="space-y-2">
+          <PhiSelector value={req.phi} onChange={(v) => setPhi(req.id, v)} disabled={readOnly} />
+          {readOnly && <p className="text-[12px] text-ink-500">No se puede cambiar mientras hay una ejecución en curso.</p>}
+          {phiSuggestion.value !== req.phi && !(phiSuggestion.value === "desconocido" && req.phi === "si") && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-line bg-sunken/60 px-3 py-2 text-[12.5px] text-ink-700">
+              <span>
+                <span className="font-semibold">El orquestador sugiere «{phiSuggestion.value === "si" ? "Sí" : phiSuggestion.value === "no" ? "No" : "No lo sé"}».</span> {phiSuggestion.reason}
+              </span>
+              {!readOnly && (
+                <button className="btn-ghost ml-auto" onClick={() => setPhi(req.id, phiSuggestion.value)}>
+                  aplicar sugerencia
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+        <div className={`rounded-lg border px-3 py-2.5 text-[12.5px] leading-5 ${req.phi === "no" ? "border-line bg-sunken/60 text-ink-500" : "border-teal/20 bg-teal-soft/60 text-teal"}`}>
+          <p className="mb-1 font-semibold">{req.phi === "no" ? "Política estándar" : "Política de PHI activa"}</p>
+          {req.phi === "no" ? (
+            <p>Privacidad HIPAA es opcional. Si el diff toca rutas de datos de salud, el orquestador lo seguirá sugiriendo.</p>
+          ) : (
+            <ul className="space-y-0.5">
+              {PHI_POLICY.map((p) => (
+                <li key={p}>• {p}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
     <div className="grid gap-5 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
       <section className="panel">
         <div className="panel-title">
@@ -182,6 +224,7 @@ export default function RequirementTab({ req, readOnly }: { req: Requirement; re
           })}
         </div>
       </section>
+    </div>
     </div>
   );
 }

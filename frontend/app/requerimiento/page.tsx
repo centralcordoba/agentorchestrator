@@ -4,8 +4,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import AgentPanel from "@/components/rq/AgentPanel";
+import ChatPanel from "@/components/rq/chat/ChatPanel";
 import { CodeTab, KiuwanTab, SqlTab, UiuxTab, VerdictTab, VtrTab } from "@/components/rq/tabs/DeliverableTabs";
 import ExecutionTab from "@/components/rq/tabs/ExecutionTab";
+import PrivacyTab from "@/components/rq/tabs/PrivacyTab";
+import { PhiBadge } from "@/components/rq/PhiControl";
 import PlanTab from "@/components/rq/tabs/PlanTab";
 import RequirementTab from "@/components/rq/tabs/RequirementTab";
 import { EmptyState, StatusDot, Tabs, VerdictBadge } from "@/components/rq/ui";
@@ -13,8 +16,8 @@ import { REQ_STATUS_LABELS, requirementStatus, runView } from "@/lib/rq/derive";
 import { useNow, useRq } from "@/lib/rq/store";
 import type { AgentId } from "@/lib/rq/types";
 
-type TabId = "requerimiento" | "plan" | "ejecucion" | "codigo" | "kiuwan" | "sql" | "uiux" | "vtr" | "dictamen";
-const TAB_IDS: TabId[] = ["requerimiento", "plan", "ejecucion", "codigo", "kiuwan", "sql", "uiux", "vtr", "dictamen"];
+type TabId = "requerimiento" | "plan" | "ejecucion" | "codigo" | "kiuwan" | "sql" | "uiux" | "privacidad" | "vtr" | "dictamen";
+const TAB_IDS: TabId[] = ["requerimiento", "plan", "ejecucion", "codigo", "kiuwan", "sql", "uiux", "privacidad", "vtr", "dictamen"];
 
 export default function RequirementPage() {
   return (
@@ -34,6 +37,7 @@ function RequirementDetail() {
   const [tab, setTabState] = useState<TabId>(initialTab);
   const [runId, setRunId] = useState<string | null>(null);
   const [panel, setPanel] = useState<{ agent: AgentId; tab?: "actividad" | "configuracion" } | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const setTab = useCallback(
     (t: TabId) => {
@@ -71,7 +75,7 @@ function RequirementDetail() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 transition-[padding] ${chatOpen ? "xl:pr-[476px]" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <Link href="/" className="text-[12px] text-ink-500 hover:text-ink-900">
@@ -80,13 +84,19 @@ function RequirementDetail() {
           <div className="mt-1 flex flex-wrap items-center gap-2">
             <span className="font-mono text-[13px] text-accent">{req.id}</span>
             <span className="chip chip-neutral">{REQ_STATUS_LABELS[status]}</span>
+            <PhiBadge phi={req.phi} />
             {view?.verdict && <VerdictBadge verdict={view.verdict} />}
           </div>
           <h1 className="font-serif text-[24px] leading-tight text-ink-900">{req.title}</h1>
         </div>
-        <button className="btn-ghost" onClick={() => router.push("/agentes")}>
-          configuración global de agentes
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button className="btn-primary py-1.5" onClick={() => setChatOpen((v) => !v)} aria-expanded={chatOpen} aria-controls="chat-asistente">
+            {chatOpen ? "Cerrar asistente" : "Preguntar al asistente"}
+          </button>
+          <button className="btn-ghost" onClick={() => router.push("/agentes")}>
+            configuración global de agentes
+          </button>
+        </div>
       </div>
 
       <Tabs<TabId>
@@ -100,6 +110,7 @@ function RequirementDetail() {
           { id: "kiuwan", label: "Kiuwan", badge: dot("kiuwan"), hidden: !enabled("kiuwan") },
           { id: "sql", label: "SQL", badge: dot("sql"), hidden: !enabled("sql") },
           { id: "uiux", label: "UI/UX", badge: dot("uiux"), hidden: !enabled("uiux") },
+          { id: "privacidad", label: "Privacidad", badge: dot("privacy"), hidden: !enabled("privacy") },
           { id: "vtr", label: "VTR", badge: dot("vtr"), hidden: !enabled("vtr") },
           { id: "dictamen", label: "Dictamen", badge: dot("verdict") },
         ]}
@@ -123,9 +134,16 @@ function RequirementDetail() {
         {tab === "kiuwan" && <KiuwanTab view={view} />}
         {tab === "sql" && <SqlTab view={view} />}
         {tab === "uiux" && <UiuxTab view={view} />}
+        {tab === "privacidad" && <PrivacyTab req={req} view={view} />}
         {tab === "vtr" && <VtrTab view={view} />}
-        {tab === "dictamen" && <VerdictTab view={view} />}
+        {tab === "dictamen" && <VerdictTab req={req} view={view} />}
       </div>
+
+      {chatOpen && (
+        <div id="chat-asistente">
+          <ChatPanel req={req} view={view} tab={tab} onNavigate={(t) => setTab(t as TabId)} onClose={() => setChatOpen(false)} />
+        </div>
+      )}
 
       {panel && (
         <AgentPanel

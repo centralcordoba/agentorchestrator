@@ -6,19 +6,21 @@ import type { AgentId, Run, TraceEvent } from "@/lib/rq/types";
 import { fmtUsd } from "./ui";
 
 const W = 1000;
-const H = 430;
+const H = 532;
 const NW = 156;
 const NH = 74;
 
 const POS: Record<AgentId, { x: number; y: number }> = {
-  orchestrator: { x: 95, y: 215 },
-  code: { x: 295, y: 215 },
+  orchestrator: { x: 95, y: 266 },
+  code: { x: 295, y: 266 },
   tests: { x: 515, y: 62 },
   kiuwan: { x: 515, y: 164 },
   sql: { x: 515, y: 266 },
   uiux: { x: 515, y: 368 },
-  vtr: { x: 725, y: 215 },
-  verdict: { x: 912, y: 215 },
+  privacy: { x: 515, y: 470 },
+  vtr: { x: 725, y: 266 },
+  verdict: { x: 912, y: 266 },
+  chat: { x: -1000, y: -1000 }, // no se dibuja: el asistente no participa en el flujo
 };
 
 const STRUCTURE: [AgentId, AgentId][] = [
@@ -27,10 +29,12 @@ const STRUCTURE: [AgentId, AgentId][] = [
   ["code", "kiuwan"],
   ["code", "sql"],
   ["code", "uiux"],
+  ["code", "privacy"],
   ["tests", "vtr"],
   ["kiuwan", "vtr"],
   ["sql", "vtr"],
   ["uiux", "vtr"],
+  ["privacy", "vtr"],
   ["vtr", "verdict"],
 ];
 
@@ -161,7 +165,7 @@ export default function FlowGraph({ run, events, now, selected, onSelect }: Prop
               <rect width={NW} height={NH} rx={12} fill="#FFFFFF" stroke={isSel ? "#1F1E1D" : working ? a.color : "#D5D1C5"} strokeWidth={isSel ? 2 : working ? 1.8 : 1.2} strokeDasharray={off ? "4 3" : undefined} />
               <rect x={0} y={12} width={3.5} height={NH - 24} rx={1.5} fill={a.color} />
               <text x={14} y={20} fontSize={12.5} fontWeight={600} fill="#1F1E1D">
-                {a.label}
+                {a.nodeLabel ?? a.label}
               </text>
               <text x={NW - 10} y={20} fontSize={9.5} textAnchor="end" fill="#8C887F" fontFamily="ui-monospace, monospace">
                 {s.llmCalls > 0 ? fmtUsd(s.costUsd) : ""}

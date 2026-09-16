@@ -1,6 +1,7 @@
 "use client";
 
 import { AGENTS } from "@/lib/rq/agents";
+import { SAFEGUARD_LABEL } from "@/lib/rq/privacy";
 import { SEVERITY_LABELS, VERDICT_LABELS } from "@/lib/rq/scenarios";
 import type { AgentId, AgentRunStatus, AppUser, Finding, Severity, Verdict } from "@/lib/rq/types";
 
@@ -164,6 +165,11 @@ export function FindingList({ findings, empty = "Sin hallazgos." }: { findings: 
                     {f.line ? `:${f.line}` : ""}
                   </span>
                 ))}
+              {f.safeguard && (
+                <span className="chip border-teal/30 bg-teal-soft text-teal" title={SAFEGUARD_LABEL[f.safeguard]}>
+                  {SAFEGUARD_LABEL[f.safeguard].split(" · ")[1]}
+                </span>
+              )}
               <AgentChip id={f.source} />
             </span>
           </div>

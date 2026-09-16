@@ -1,7 +1,8 @@
 // Entregables simulados por escenario. En el prototipo sin backend, cada requerimiento
 // apunta a un escenario y los agentes "producen" estos resultados durante la ejecución.
 import { languageSummary } from "./github";
-import type { AgentId, ChangeMapEntry, Deliverables, Finding, Requirement, ScenarioId, Severity, Verdict, VerdictReport } from "./types";
+import { SAFEGUARD_LABEL, WHERE_LABELS, handlesPhi, realPrivacyReport } from "./privacy";
+import type { AgentId, ChangeMapEntry, Deliverables, Finding, Requirement, ScenarioId, Severity, Verdict, VerdictReport, VtrSection } from "./types";
 
 type ScenarioDeliverables = Omit<Deliverables, "verdict" | "realRepo">;
 type BaseDeliverables = Omit<Deliverables, "verdict">;
@@ -18,6 +19,7 @@ const PAGOS: ScenarioDeliverables = {
       { file: "src/main/java/com/banco/pagos/api/DiscrepanciaController.java", change: "modificado", added: 37, removed: 6, symbols: ["DiscrepanciaController.listar"], criteria: [2] },
       { file: "src/main/resources/application.yml", change: "modificado", added: 4, removed: 0, symbols: ["conciliacion.cron"], criteria: [0] },
       { file: "db/migrations/V2026_09_10__tabla_discrepancias.sql", change: "nuevo", added: 41, removed: 0, symbols: ["PAG_DISCREPANCIA"], criteria: [1] },
+      { file: "src/test/resources/fixtures/copagos_2026_09_10.csv", change: "nuevo", added: 12, removed: 0, symbols: [], criteria: [1] },
     ],
     findings: [
       { id: "C1", severity: "alta", source: "code", title: "Comparación de importes con double", file: "ConciliacionService.java", line: 118, detail: "Los importes se comparan con `double`, lo que produce discrepancias falsas por redondeo (p. ej. 10.10 vs 10.1000001).", suggestion: "Usar BigDecimal con compareTo y escala 2." },
@@ -75,6 +77,32 @@ const PAGOS: ScenarioDeliverables = {
     scenarios: [],
     findings: [],
   },
+  privacy: {
+    detections: [
+      { identifier: "nombre", file: "src/test/resources/fixtures/copagos_2026_09_10.csv", line: 2, where: "datos_prueba", masked: "Nombre · valor oculto" },
+      { identifier: "afiliado", file: "src/test/resources/fixtures/copagos_2026_09_10.csv", line: 2, where: "datos_prueba", masked: "N.º de afiliado / póliza · valor oculto" },
+      { identifier: "afiliado", file: "src/test/resources/fixtures/copagos_2026_09_10.csv", line: 3, where: "datos_prueba", masked: "N.º de afiliado / póliza · valor oculto" },
+      { identifier: "afiliado", file: "src/test/resources/fixtures/copagos_2026_09_10.csv", line: 4, where: "datos_prueba", masked: "N.º de afiliado / póliza · valor oculto" },
+      { identifier: "dato_paciente", file: "ConciliacionService.java", line: 152, where: "log", masked: "Dato de paciente en logs · valor oculto" },
+      { identifier: "afiliado", file: "DiscrepanciaController.java", line: 29, where: "url", masked: "N.º de afiliado / póliza en URL · valor oculto" },
+    ],
+    safeguards: [
+      { id: "acceso", status: "riesgo", evidence: "GET /api/discrepancias no exige un rol de facturación y las columnas nombre_afiliado y member_id se guardan sin cifrado de columna." },
+      { id: "auditoria", status: "riesgo", evidence: "No se registra quién consulta las discrepancias ni qué afiliados ve." },
+      { id: "integridad", status: "riesgo", evidence: "Relanzar el job duplica discrepancias (hallazgo C2, confirmado por la prueba job_relanzado_no_duplica)." },
+      { id: "autenticacion", status: "cumple", evidence: "El endpoint está protegido por Spring Security con OAuth2 corporativo." },
+      { id: "transmision", status: "cumple", evidence: "El fichero del adquirente llega por SFTP y la API solo se publica por HTTPS." },
+    ],
+    minimumNecessary: "La consulta de discrepancias devuelve nombre y número de afiliado, pero facturación solo necesita el identificador del pago, la fecha y el importe.",
+    findings: [
+      { id: "PR1", severity: "critica", source: "privacy", safeguard: "acceso", title: "Datos de afiliados con formato real en un fixture de pruebas", file: "src/test/resources/fixtures/copagos_2026_09_10.csv", line: 2, detail: "El fichero de prueba contiene nombres y números de afiliado con formato real en 3 filas. Si provienen de producción, es una divulgación de PHI en el repositorio. Los valores no se muestran.", suggestion: "Sustituir por datos sintéticos, purgar el historial de git y avisar al responsable de privacidad para evaluar el incidente." },
+      { id: "PR2", severity: "alta", source: "privacy", safeguard: "acceso", title: "Datos de afiliado escritos en logs", file: "ConciliacionService.java", line: 152, detail: "log.info incluye el nombre del afiliado junto al importe del copago; los logs se replican a sistemas sin controles de PHI.", suggestion: "Registrar solo el identificador tokenizado del pago." },
+      { id: "PR3", severity: "alta", source: "privacy", safeguard: "transmision", title: "Número de afiliado en parámetros de URL", file: "DiscrepanciaController.java", line: 29, detail: "El filtro ?memberId= queda en logs de proxies, del servidor y en el historial del navegador.", suggestion: "Recibir el filtro en el cuerpo de una petición POST." },
+      { id: "PR4", severity: "media", source: "privacy", safeguard: "acceso", title: "Endpoint con PHI sin rol específico", file: "DiscrepanciaController.java", line: 22, detail: "Cualquier usuario autenticado puede listar discrepancias con datos de afiliados.", suggestion: "Restringir con @PreAuthorize(\"hasRole('FACTURACION')\")." },
+      { id: "PR5", severity: "media", source: "privacy", safeguard: "auditoria", title: "Sin registro de auditoría de accesos a PHI", file: "DiscrepanciaController.java", line: 23, detail: "No queda constancia de quién consultó qué afiliados ni cuándo.", suggestion: "Emitir un evento de auditoría por consulta (usuario, filtros, número de registros)." },
+      { id: "PR6", severity: "media", source: "privacy", safeguard: "acceso", title: "La consulta trae más datos de los necesarios", file: "ReporteRepository.java", line: 64, detail: "Se seleccionan nombre y número de afiliado aunque el criterio de aceptación no los requiere (principio de mínimo necesario).", suggestion: "Proyectar solo id de pago, fecha, centro médico e importe." },
+    ],
+  },
   vtr: {
     templateName: "VTR_modelo.docx",
     outputName: "VTR_REQ-1042.docx",
@@ -96,16 +124,16 @@ const PORTAL: ScenarioDeliverables = {
   code: {
     stack: "Next.js 14 · React 18 · API .NET 8",
     summary:
-      "Se sustituye el formulario de alta de clientes por uno de tres pasos con validación en cliente y servidor, guardado de borrador y carga de documento de identidad.",
+      "Se sustituye el formulario de alta de pacientes por uno de tres pasos con validación en paciente y servidor, guardado de borrador y carga de documento de identidad.",
     changeMap: [
-      { file: "web/app/clientes/alta/page.tsx", change: "modificado", added: 162, removed: 88, symbols: ["AltaClientePage"], criteria: [0] },
+      { file: "web/app/pacientes/alta/page.tsx", change: "modificado", added: 162, removed: 88, symbols: ["AltaPacientePage"], criteria: [0] },
       { file: "web/components/alta/StepDatosPersonales.tsx", change: "nuevo", added: 124, removed: 0, symbols: ["StepDatosPersonales"], criteria: [0, 1] },
       { file: "web/components/alta/StepDocumento.tsx", change: "nuevo", added: 98, removed: 0, symbols: ["StepDocumento"], criteria: [2] },
-      { file: "web/lib/validators/cliente.ts", change: "nuevo", added: 57, removed: 0, symbols: ["validarDni", "validarEmail"], criteria: [1] },
-      { file: "api/Controllers/ClientesController.cs", change: "modificado", added: 41, removed: 12, symbols: ["ClientesController.CrearBorrador"], criteria: [3] },
+      { file: "web/lib/validators/paciente.ts", change: "nuevo", added: 57, removed: 0, symbols: ["validarDni", "validarEmail"], criteria: [1] },
+      { file: "api/Controllers/PacientesController.cs", change: "modificado", added: 41, removed: 12, symbols: ["PacientesController.CrearBorrador"], criteria: [3] },
     ],
     findings: [
-      { id: "C1", severity: "media", source: "code", title: "Validación de DNI solo en cliente", file: "ClientesController.cs", line: 54, detail: "El endpoint acepta DNI con letra de control incorrecta si se llama directamente.", suggestion: "Replicar validarDni en el servidor." },
+      { id: "C1", severity: "media", source: "code", title: "Validación de DNI solo en cliente", file: "PacientesController.cs", line: 54, detail: "El endpoint acepta DNI con letra de control incorrecta si se llama directamente.", suggestion: "Replicar validarDni en el servidor." },
       { id: "C2", severity: "baja", source: "code", title: "Borrador guardado en localStorage con datos personales", file: "page.tsx", line: 73, detail: "El borrador incluye DNI y teléfono en claro en el navegador." },
       { id: "C3", severity: "info", source: "code", title: "Componentes sin pruebas previas", detail: "Los tres pasos nuevos no tenían pruebas en el repositorio." },
     ],
@@ -115,8 +143,8 @@ const PORTAL: ScenarioDeliverables = {
     command: "npx vitest run --dir web/__generated__",
     coverage: 83,
     tests: [
-      { name: "validarDni acepta DNI con letra correcta", file: "cliente.generated.test.ts", kind: "unitario", criterion: 1, status: "paso", durationMs: 6, code: `it("validarDni acepta DNI con letra correcta", () => {\n  expect(validarDni("12345678Z")).toBe(true);\n});` },
-      { name: "validarDni rechaza letra incorrecta", file: "cliente.generated.test.ts", kind: "unitario", criterion: 1, status: "paso", durationMs: 4, code: `it("validarDni rechaza letra incorrecta", () => {\n  expect(validarDni("12345678A")).toBe(false);\n});` },
+      { name: "validarDni acepta DNI con letra correcta", file: "paciente.generated.test.ts", kind: "unitario", criterion: 1, status: "paso", durationMs: 6, code: `it("validarDni acepta DNI con letra correcta", () => {\n  expect(validarDni("12345678Z")).toBe(true);\n});` },
+      { name: "validarDni rechaza letra incorrecta", file: "paciente.generated.test.ts", kind: "unitario", criterion: 1, status: "paso", durationMs: 4, code: `it("validarDni rechaza letra incorrecta", () => {\n  expect(validarDni("12345678A")).toBe(false);\n});` },
       { name: "no avanza de paso con email inválido", file: "StepDatosPersonales.generated.test.tsx", kind: "unitario", criterion: 0, status: "paso", durationMs: 88, code: `it("no avanza de paso con email inválido", async () => {\n  render(<StepDatosPersonales onNext={next} />);\n  await user.type(screen.getByLabelText(/email/i), "no-es-email");\n  await user.click(screen.getByRole("button", { name: /siguiente/i }));\n  expect(next).not.toHaveBeenCalled();\n});` },
       { name: "rechaza documento mayor de 5 MB", file: "StepDocumento.generated.test.tsx", kind: "unitario", criterion: 2, status: "paso", durationMs: 71, code: `it("rechaza documento mayor de 5 MB", async () => {\n  render(<StepDocumento />);\n  await user.upload(screen.getByLabelText(/documento/i), bigFile(6));\n  expect(screen.getByRole("alert")).toHaveTextContent(/5 MB/);\n});` },
     ],
@@ -127,20 +155,20 @@ const PORTAL: ScenarioDeliverables = {
     rows: 12,
     defects: [
       { ruleId: "OPT.JAVASCRIPT.SEC.LocalStorageSensitiveData", rule: "Datos sensibles en almacenamiento local", severity: "media", category: "Seguridad", file: "page.tsx", line: 73, falsePositive: false, note: "Coincide con C2 de Código." },
-      { ruleId: "OPT.CSHARP.RGP.AvoidEmptyCatch", rule: "Bloque catch vacío", severity: "media", category: "Fiabilidad", file: "ClientesController.cs", line: 88, falsePositive: false, note: "" },
+      { ruleId: "OPT.CSHARP.RGP.AvoidEmptyCatch", rule: "Bloque catch vacío", severity: "media", category: "Fiabilidad", file: "PacientesController.cs", line: 88, falsePositive: false, note: "" },
       { ruleId: "OPT.JAVASCRIPT.MANT.ComplexFunction", rule: "Complejidad ciclomática alta", severity: "baja", category: "Mantenibilidad", file: "StepDatosPersonales.tsx", line: 40, falsePositive: false, note: "" },
       { ruleId: "OPT.JAVASCRIPT.SEC.XSS", rule: "Posible XSS", severity: "alta", category: "Seguridad", file: "StepDocumento.tsx", line: 61, falsePositive: true, note: "Falso positivo: React escapa el nombre del archivo; no se usa dangerouslySetInnerHTML." },
     ],
     findings: [
       { id: "K1", severity: "media", source: "kiuwan", title: "Datos personales en localStorage", file: "page.tsx", line: 73, detail: "Kiuwan lo marca como seguridad media; se deduplica con C2." },
-      { id: "K2", severity: "media", source: "kiuwan", title: "Catch vacío en ClientesController", file: "ClientesController.cs", line: 88, detail: "Los errores al guardar borrador se pierden sin log." },
+      { id: "K2", severity: "media", source: "kiuwan", title: "Catch vacío en PacientesController", file: "PacientesController.cs", line: 88, detail: "Los errores al guardar borrador se pierden sin log." },
     ],
   },
   sql: { engine: "SQL Server 2022", scripts: [], findings: [] },
   uiux: {
     baseUrl: "http://localhost:3000",
     scenarios: [
-      { name: "Alta completa en 3 pasos", browser: "chromium", status: "paso", durationMs: 8420, a11yIssues: 0, steps: ["Abrir /clientes/alta", "Rellenar datos personales", "Subir documento de 1,2 MB", "Confirmar y ver pantalla de éxito"] },
+      { name: "Alta completa en 3 pasos", browser: "chromium", status: "paso", durationMs: 8420, a11yIssues: 0, steps: ["Abrir /pacientes/alta", "Rellenar datos personales", "Subir documento de 1,2 MB", "Confirmar y ver pantalla de éxito"] },
       { name: "Recuperar borrador tras recargar", browser: "chromium", status: "paso", durationMs: 5110, a11yIssues: 0, steps: ["Rellenar paso 1", "Recargar página", "Comprobar que los datos siguen"] },
       { name: "Navegación solo con teclado", browser: "firefox", status: "fallo", durationMs: 6930, a11yIssues: 2, failureReason: "El botón 'Subir documento' no recibe foco con Tab (div con onClick sin role ni tabIndex).", steps: ["Tab hasta el paso 2", "Intentar abrir selector de archivo con Enter"] },
       { name: "Vista móvil 390px", browser: "webkit", status: "paso", durationMs: 4380, a11yIssues: 1, steps: ["Viewport 390×844", "Recorrer los 3 pasos", "Captura de cada paso"] },
@@ -150,11 +178,32 @@ const PORTAL: ScenarioDeliverables = {
       { id: "U2", severity: "baja", source: "uiux", title: "Contraste insuficiente en texto de ayuda", file: "StepDatosPersonales.tsx", line: 97, detail: "Ratio 3,1:1 sobre fondo blanco (mínimo 4,5:1)." },
     ],
   },
+  privacy: {
+    detections: [
+      { identifier: "dato_paciente", file: "page.tsx", line: 73, where: "almacenamiento_local", masked: "Documento, teléfono y n.º de afiliado en el navegador · valor oculto" },
+      { identifier: "dato_paciente", file: "PacientesController.cs", line: 91, where: "log", masked: "Petición de alta completa en logs · valor oculto" },
+    ],
+    safeguards: [
+      { id: "acceso", status: "riesgo", evidence: "El borrador del alta se guarda sin cifrar en localStorage con documento, teléfono y número de afiliado." },
+      { id: "auditoria", status: "riesgo", evidence: "Crear un paciente no genera evento de auditoría (usuario, fecha, origen)." },
+      { id: "integridad", status: "sin_evidencia", evidence: "No se ve verificación de integridad (hash) ni escaneo antivirus del documento subido; confirmarlo con plataforma." },
+      { id: "autenticacion", status: "cumple", evidence: "El portal exige inicio de sesión con MFA (Microsoft Entra ID) antes del alta." },
+      { id: "transmision", status: "cumple", evidence: "La subida del documento usa HTTPS con una URL prefirmada de corta duración." },
+    ],
+    minimumNecessary: "El paso 1 pide fecha de nacimiento completa y dirección, pero los criterios del alta solo requieren documento, email y teléfono.",
+    findings: [
+      { id: "PR1", severity: "alta", source: "privacy", safeguard: "acceso", title: "PHI guardada sin cifrar en el navegador", file: "page.tsx", line: 73, detail: "El borrador incluye documento, teléfono y número de afiliado en localStorage; cualquier script de la página o de una extensión puede leerlo.", suggestion: "Guardar el borrador en el servidor asociado a la sesión, o no conservar esos campos." },
+      { id: "PR2", severity: "alta", source: "privacy", safeguard: "acceso", title: "Petición de alta completa escrita en logs", file: "PacientesController.cs", line: 91, detail: "_logger.LogInformation serializa la petición entera con los datos del paciente.", suggestion: "Registrar solo el identificador del alta y el resultado." },
+      { id: "PR3", severity: "media", source: "privacy", safeguard: "auditoria", title: "Alta de paciente sin evento de auditoría", file: "PacientesController.cs", line: 48, detail: "No queda constancia de quién dio de alta al paciente ni desde dónde.", suggestion: "Registrar un evento de auditoría inmutable por alta." },
+      { id: "PR4", severity: "media", source: "privacy", safeguard: "acceso", title: "Se piden datos que el alta no necesita", file: "StepDatosPersonales.tsx", line: 30, detail: "Fecha de nacimiento completa y dirección no forman parte de los criterios de aceptación (mínimo necesario).", suggestion: "Quitar los campos o justificar su necesidad con el área funcional." },
+      { id: "PR5", severity: "info", source: "privacy", title: "Las pruebas generadas usan datos sintéticos", detail: "Las 4 pruebas usan valores ficticios; no se detectó PHI en los datos de prueba." },
+    ],
+  },
   vtr: {
     templateName: "VTR_modelo.docx",
     outputName: "VTR_REQ-1057.docx",
     sections: [
-      { title: "1. Identificación del requerimiento", status: "completa", sources: ["orchestrator"], content: "REQ-1057 · Nuevo formulario de alta de clientes en portal web." },
+      { title: "1. Identificación del requerimiento", status: "completa", sources: ["orchestrator"], content: "REQ-1057 · Nuevo formulario de alta de pacientes en portal web." },
       { title: "2. Descripción funcional del cambio", status: "completa", sources: ["code"], content: "Formulario de alta en tres pasos con validación, guardado de borrador y carga de documento." },
       { title: "3. Componentes afectados", status: "completa", sources: ["code"], content: "3 componentes React (2 nuevos), 1 módulo de validación y 1 controlador .NET." },
       { title: "4. Cambios en base de datos", status: "vacia", sources: [], content: "No aplica." },
@@ -175,9 +224,10 @@ export function sortFindings(list: Finding[]): Finding[] {
   return [...list].sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity]);
 }
 
-/** Hallazgos de los agentes que llegaron a completarse, deduplicados por archivo+línea. */
-// Con un repositorio real solo cuentan los agentes que trabajan sobre datos reales (Código y SQL).
-const REAL_SOURCES: AgentId[] = ["code", "sql"];
+// Con un repositorio real solo cuentan los agentes que trabajan sobre datos reales (Código, SQL y Privacidad).
+const REAL_SOURCES: AgentId[] = ["code", "sql", "privacy"];
+
+/** Hallazgos de los agentes que llegaron a completarse, deduplicados por archivo+línea (gana el más grave). */
 
 export function consolidatedFindings(d: BaseDeliverables, completedAll: AgentId[]): Finding[] {
   const completed = d.realRepo ? completedAll.filter((a) => REAL_SOURCES.includes(a)) : completedAll;
@@ -187,6 +237,7 @@ export function consolidatedFindings(d: BaseDeliverables, completedAll: AgentId[
   if (completed.includes("kiuwan")) all.push(...d.kiuwan.findings);
   if (completed.includes("sql")) all.push(...d.sql.findings);
   if (completed.includes("uiux")) all.push(...d.uiux.findings);
+  if (completed.includes("privacy")) all.push(...d.privacy.findings);
   const seen = new Map<string, Finding>();
   for (const f of sortFindings(all)) {
     const key = f.file && f.line ? `${f.file}:${f.line}` : f.id + f.source;
@@ -195,13 +246,13 @@ export function consolidatedFindings(d: BaseDeliverables, completedAll: AgentId[
   return sortFindings([...seen.values()]);
 }
 
-function buildVerdict(d: BaseDeliverables, completed: AgentId[]): VerdictReport {
+function buildVerdict(d: BaseDeliverables, completed: AgentId[], req: Requirement): VerdictReport {
   const findings = consolidatedFindings(d, completed);
   const crit = findings.filter((f) => f.severity === "critica").length;
   const high = findings.filter((f) => f.severity === "alta").length;
   const failed = completed.includes("tests") && !d.realRepo ? d.tests.tests.filter((t) => t.status === "fallo").length : 0;
   const guardrails: string[] = [];
-  if (d.realRepo) guardrails.push("G0 · Repositorio real: el dictamen solo considera Código y SQL; Tests, Kiuwan y UI/UX aún son de ejemplo.");
+  if (d.realRepo) guardrails.push("G0 · Repositorio real: el dictamen solo considera Código, SQL y Privacidad; Tests, Kiuwan y UI/UX aún son de ejemplo.");
   let verdict: Verdict = "APROBADO";
   if (crit > 0) {
     verdict = "RECHAZADO";
@@ -212,12 +263,21 @@ function buildVerdict(d: BaseDeliverables, completed: AgentId[]): VerdictReport 
   }
   const missing = ((d.realRepo ? ["code"] : ["code", "tests", "kiuwan"]) as AgentId[]).filter((a) => !completed.includes(a));
   if (missing.length) guardrails.push(`G3 · Agentes desactivados (${missing.join(", ")}): la confianza se limita a 0,6.`);
-  const confidence = missing.length ? 0.6 : verdict === "APROBADO" ? 0.9 : 0.82;
+  const privacyCrit = completed.includes("privacy") ? d.privacy.findings.filter((f) => f.severity === "critica").length : 0;
+  if (privacyCrit) guardrails.push(`G4 · Privacidad detectó ${privacyCrit} exposición(es) crítica(s) de PHI: corregir y avisar al responsable de privacidad antes del pase.`);
+  const phiWithoutReview = handlesPhi(req) && !completed.includes("privacy");
+  if (phiWithoutReview) {
+    guardrails.push("G5 · Requerimiento con PHI sin revisión de Privacidad: el dictamen no puede ser APROBADO y la confianza se limita a 0,5.");
+    if (verdict === "APROBADO") verdict = "APROBADO_CON_OBSERVACIONES";
+  }
+  const confidence = phiWithoutReview ? 0.5 : missing.length ? 0.6 : verdict === "APROBADO" ? 0.9 : 0.82;
   const rationale =
     verdict === "RECHAZADO"
       ? `Se rechaza por ${crit} hallazgo(s) crítico(s). Además hay ${high} de severidad alta${failed ? ` y ${failed} prueba(s) fallida(s)` : ""} que deben corregirse.`
       : verdict === "APROBADO_CON_OBSERVACIONES"
-        ? `No hay hallazgos críticos, pero quedan ${high} de severidad alta${failed ? ` y ${failed} prueba(s) fallida(s)` : ""}. Puede avanzar si se corrigen antes del pase.`
+        ? high || failed
+          ? `No hay hallazgos críticos, pero quedan ${high} de severidad alta${failed ? ` y ${failed} prueba(s) fallida(s)` : ""}. Puede avanzar si se corrigen antes del pase.`
+          : "No hay hallazgos graves, pero el requerimiento maneja PHI y no pasó por la revisión de Privacidad."
         : d.realRepo
           ? "Las reglas deterministas no detectaron hallazgos críticos ni altos en el diff."
           : "No se detectaron hallazgos críticos ni altos y todas las pruebas generadas pasan.";
@@ -241,6 +301,7 @@ function withRealRepo(base: ScenarioDeliverables, req: Requirement): BaseDeliver
   const sqlFiles = repo.files.filter((f) => /\.sql$/i.test(f.path) && f.status !== "removed");
   const codeFindings = repo.findings.filter((f) => f.source === "code");
   const sqlFindings = repo.findings.filter((f) => f.source === "sql");
+  const privacy = realPrivacyReport(repo);
   const stack = languageSummary(repo.languages);
   const summary = `${repo.fullName} · ${repo.rangeLabel}: ${repo.aheadBy} commit(s), ${repo.files.length} archivo(s) cambiados (+${added} −${removed}). Hallazgos obtenidos con reglas deterministas sobre las líneas añadidas; la revisión semántica llegará con el LLM en el backend.`;
   const vtrSections = base.vtr.sections.map((s) => {
@@ -254,13 +315,29 @@ function withRealRepo(base: ScenarioDeliverables, req: Requirement): BaseDeliver
     realRepo: repo,
     code: { stack, summary, changeMap, findings: codeFindings },
     sql: { engine: "detectado por extensión", scripts: sqlFiles.map((f) => ({ file: f.path, statements: 0, kind: "script" })), findings: sqlFindings },
+    privacy,
     vtr: { ...base.vtr, outputName: `VTR_${req.id}.docx`, sections: vtrSections },
   };
 }
 
+/** Sección del VTR sobre PHI: resume lo que encontró el agente de Privacidad. */
+function privacySection(d: BaseDeliverables, req: Requirement): VtrSection {
+  const title = "10. Impacto en PHI y controles HIPAA";
+  if (!handlesPhi(req)) return { title, status: "vacia", sources: [], content: "El requerimiento está clasificado como sin PHI." };
+  const atRisk = d.privacy.safeguards.filter((s) => s.status === "riesgo").map((s) => SAFEGUARD_LABEL[s.id]);
+  const where = Array.from(new Set(d.privacy.detections.map((x) => WHERE_LABELS[x.where])));
+  return {
+    title,
+    status: "completa",
+    sources: ["privacy"],
+    content: `${d.privacy.detections.length} posible(s) identificador(es) de PHI${where.length ? ` en ${where.join(", ")}` : ""} (valores no incluidos). Salvaguardas en riesgo: ${atRisk.length ? atRisk.join("; ") : "ninguna"}. ${d.privacy.minimumNecessary}`,
+  };
+}
+
 export function deliverablesFor(req: Requirement, completed: AgentId[]): Deliverables {
-  const base = withRealRepo(SCENARIOS[req.scenario], req);
-  return { ...base, verdict: buildVerdict(base, completed) };
+  const raw = withRealRepo(SCENARIOS[req.scenario], req);
+  const base: BaseDeliverables = { ...raw, vtr: { ...raw.vtr, sections: [...raw.vtr.sections, privacySection(raw, req)] } };
+  return { ...base, verdict: buildVerdict(base, completed, req) };
 }
 
 export const SEVERITY_LABELS: Record<Severity, string> = {

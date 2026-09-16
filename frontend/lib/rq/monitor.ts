@@ -71,8 +71,10 @@ const BASE_AGENT: Record<AgentId, [number, number, number]> = {
   kiuwan: [61, 310_000, 0.19],
   sql: [34, 150_000, 0.31],
   uiux: [52, 290_000, 0.88],
+  privacy: [49, 410_000, 1.64],
   vtr: [58, 520_000, 0.42],
   verdict: [23, 110_000, 0.29],
+  chat: [94, 640_000, 1.12],
 };
 
 export function buildMonitor(requirements: Requirement[], currentUserId: string, location: ViewLocation, now: number) {
@@ -117,8 +119,8 @@ export function buildMonitor(requirements: Requirement[], currentUserId: string,
     const online = isYou || h % 10 < (i === 4 ? 2 : 8);
     const requirementId = isYou ? location.requirementId : reqIds[(h >>> 3) % reqIds.length];
     const simRunning = !isYou && online && (h >>> 5) % 2 === 0;
-    const simAgents: AgentId[] = simRunning ? [AGENT_ORDER[1 + ((h >>> 7) % 6)]] : [];
-    if (simRunning && (h >>> 9) % 2 === 0) simAgents.push(AGENT_ORDER[1 + ((h >>> 11) % 6)]);
+    const simAgents: AgentId[] = simRunning ? [AGENT_ORDER[1 + ((h >>> 7) % 7)]] : [];
+    if (simRunning && (h >>> 9) % 2 === 0) simAgents.push(AGENT_ORDER[1 + ((h >>> 11) % 7)]);
     return {
       user,
       isYou,

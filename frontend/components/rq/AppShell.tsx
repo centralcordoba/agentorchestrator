@@ -9,12 +9,14 @@ import { Avatar } from "./ui";
 const NAV = [
   { href: "/", label: "Requerimientos", match: (p: string) => p === "/" || p.startsWith("/requerimiento") },
   { href: "/agentes", label: "Agentes", match: (p: string) => p.startsWith("/agentes") },
+  { href: "/gobierno", label: "Gobierno", match: (p: string) => p.startsWith("/gobierno") },
   { href: "/monitor", label: "Monitor", match: (p: string) => p.startsWith("/monitor") },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
-  const { currentUserId, setCurrentUser, resetDemo, ready } = useRq();
+  const { currentUserId, setCurrentUser, resetDemo, ready, changeRequests } = useRq();
+  const pendingChanges = changeRequests.filter((c) => c.status === "pendiente").length;
   const user = USERS.find((u) => u.id === currentUserId) ?? USERS[0];
 
   if (pathname.startsWith("/demo-bolsa")) return <>{children}</>;
@@ -37,11 +39,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <Link
                   key={n.href}
                   href={n.href}
-                  className={`rounded-md px-2.5 py-1.5 text-[13px] transition ${
+                  className={`inline-flex items-center rounded-md px-2.5 py-1.5 text-[13px] transition ${
                     active ? "bg-sunken font-semibold text-ink-900" : "text-ink-500 hover:bg-sunken hover:text-ink-900"
                   }`}
                 >
                   {n.label}
+                  {n.href === "/gobierno" && pendingChanges > 0 && (
+                    <span className="ml-1.5 chip border-warn/30 bg-warn-soft text-warn" title={`${pendingChanges} solicitud(es) de cambio pendientes`}>
+                      {pendingChanges}
+                    </span>
+                  )}
                 </Link>
               );
             })}

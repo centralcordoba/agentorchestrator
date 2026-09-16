@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AGENTS, modelLabel } from "@/lib/rq/agents";
 import { USERS } from "@/lib/rq/mockData";
-import { planWarnings } from "@/lib/rq/planner";
+import { lockedReason, planWarnings } from "@/lib/rq/planner";
+import { can, missingPermissionText } from "@/lib/rq/governance";
 import { SPEED_LABELS } from "@/lib/rq/simulator";
 import { useRq } from "@/lib/rq/store";
 import type { AgentId, Requirement, RunSpeed } from "@/lib/rq/types";
@@ -17,7 +18,9 @@ interface Props {
 }
 
 export default function PlanTab({ req, running, onStarted, onConfigure }: Props) {
-  const { requestPlan, togglePlanItem, startRun, effectiveProfile } = useRq();
+  const { requestPlan, togglePlanItem, startRun, effectiveProfile, currentUserId } = useRq();
+  const user = USERS.find((u) => u.id === currentUserId);
+  const canRun = can(user, "ejecutar");
   const [thinking, setThinking] = useState(false);
   const [speed, setSpeed] = useState<RunSpeed>("normal");
 
@@ -69,13 +72,16 @@ export default function PlanTab({ req, running, onStarted, onConfigure }: Props)
             const p = effectiveProfile(item.agentId, req.id);
             const overridden = item.enabled !== item.suggested;
             const itemWarnings = warnings.filter((w) => w.agentId === item.agentId);
+            const locked = lockedReason(req, item.agentId);
             return (
               <li key={item.agentId} className={`flex gap-3 px-4 py-3 ${item.enabled ? "" : "bg-sunken/40"}`}>
                 <button
                   role="switch"
                   aria-checked={item.enabled}
                   aria-label={`${item.enabled ? "Desactivar" : "Activar"} ${AGENTS[item.agentId].label}`}
-                  disabled={running}
+                  aria-describedby={locked ? `lock-${item.agentId}` : undefined}
+                  title={locked ?? undefined}
+                  disabled={running || (locked !== null && item.enabled)}
                   onClick={() => togglePlanItem(req.id, item.agentId)}
                   className={`relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition disabled:opacity-50 ${item.enabled ? "bg-accent" : "bg-line-strong"}`}
                 >
@@ -88,6 +94,11 @@ export default function PlanTab({ req, running, onStarted, onConfigure }: Props)
                       {item.suggested ? "sugerido" : "no sugerido"}
                     </span>
                     {overridden && <span className="chip border-accent/30 bg-accent-soft text-accent">cambio manual</span>}
+                    {locked && (
+                      <span id={`lock-${item.agentId}`} className="chip border-teal/30 bg-teal-soft text-teal">
+                        <span aria-hidden>🔒</span> {locked}
+                      </span>
+                    )}
                     <button onClick={() => onConfigure(item.agentId)} className="ml-auto font-mono text-[11px] text-ink-500 underline decoration-line-strong underline-offset-2 hover:text-ink-900">
                       {modelLabel(p.provider, p.model)} · prompt v{p.promptVersion}
                       {req.profileOverrides[item.agentId] ? " · ajustado" : ""}
@@ -133,19 +144,21 @@ export default function PlanTab({ req, running, onStarted, onConfigure }: Props)
           </label>
           <button
             className="btn-primary w-full"
-            disabled={blocked || running}
+            disabled={blocked || running || !canRun}
+            title={!canRun ? missingPermissionText("ejecutar") : undefined}
             onClick={() => {
               if (startRun(req.id, speed)) onStarted();
             }}
           >
             {running ? "Hay una ejecución en curso" : "Ejecutar revisión"}
           </button>
-          {blocked && <p className="text-[12px] leading-5 text-danger">Resuelve los bloqueos (adjuntos faltantes) o desactiva esos agentes.</p>}
+          {blocked && <p className="text-[12px] leading-5 text-danger">Resuelve los bloqueos (adjuntos faltantes o agentes obligatorios) o desactiva esos agentes.</p>}
+          {!canRun && <p className="text-[12px] leading-5 text-warn">{missingPermissionText("ejecutar")}</p>}
         </div>
         <div className="panel space-y-2 p-4 text-[12.5px] leading-5 text-ink-500">
           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-500">Cómo se ejecuta</div>
           <p>1. Código revisa el diff y genera el mapa del cambio.</p>
-          <p>2. Tests, Kiuwan, SQL y UI/UX trabajan en paralelo con ese mapa.</p>
+          <p>2. Tests, Kiuwan, SQL, UI/UX y Privacidad trabajan en paralelo con ese mapa.</p>
           <p>3. VTR redacta el documento con lo que produjeron los demás.</p>
           <p>4. Dictamen consolida y aplica los umbrales.</p>
         </div>

@@ -20,12 +20,14 @@ Ahora el enfoque cambió: **un orquestador multiagente que revisa el proceso de 
 | Kiuwan | Analiza el CSV de Kiuwan adjunto |
 | SQL | Revisa scripts y consultas (condicional) |
 | UI/UX | Pruebas con Playwright (condicional) |
+| Privacidad HIPAA | Detecta PHI en el cambio y evalúa las salvaguardas 45 CFR 164.312 (obligatorio si el requerimiento maneja PHI) |
 | VTR | **Genera** el documento Word VTR a partir de una plantilla modelo |
 | Dictamen | Consolida hallazgos y emite APROBADO / CON OBSERVACIONES / RECHAZADO |
+| Asistente de consulta (`chat`) | Responde preguntas sobre una revisión ya ejecutada citando la evidencia. Fuera del flujo: `AGENT_ORDER` no lo incluye, `ALL_AGENTS` sí |
 
-Flujo: Orquestador → Código → (Tests, Kiuwan, SQL, UI/UX en paralelo) → VTR → Dictamen.
+Flujo: Orquestador → Código → (Tests, Kiuwan, SQL, UI/UX y Privacidad en paralelo) → VTR → Dictamen.
 
-Requisitos de producto: configurar el LLM de cada agente, ver qué hace cada agente al hacer clic en él, editar su prompt (con versiones) y un panel **Monitor** con los usuarios y agentes en uso. Uso previsto: **real** (código de la empresa enviado a LLMs; tenerlo en cuenta en decisiones de seguridad).
+Requisitos de producto: configurar el LLM de cada agente, ver qué hace cada agente al hacer clic en él, editar su prompt (con versiones) y un panel **Monitor** con los usuarios y agentes en uso. Uso previsto: **real, en una empresa de salud sujeta a HIPAA** (código de la empresa enviado a LLMs; tenerlo en cuenta en decisiones de seguridad). De ahí el agente de Privacidad, el gobierno de IA (`/gobierno`) y el panel de cumplimiento del Monitor.
 
 ### Estado actual
 - **Frontend nuevo = prototipo SIN backend** con datos simulados. Es lo que se está construyendo.
@@ -49,18 +51,23 @@ Backend (solo para `/demo-bolsa`): ver `README.md` §4 (`start-local.bat` o `uvi
 
 ## Mapa del prototipo (frontend)
 Rutas (`frontend/app/`), todas `"use client"` y compatibles con export estático (sin rutas dinámicas: el detalle usa `?id=` y `?tab=`):
-- `/` lista y alta de requerimientos · `/requerimiento?id=REQ-…&tab=…` detalle por pestañas · `/agentes` configuración global · `/monitor` usuarios y agentes · `/demo-bolsa` demo antigua.
+- `/` lista y alta de requerimientos · `/requerimiento?id=REQ-…&tab=…` detalle por pestañas · `/agentes` configuración global ·
+  `/gobierno` control de cambios, fichas y auditoría · `/monitor` actividad y cumplimiento HIPAA · `/demo-bolsa` demo antigua.
 
 Lógica en `frontend/lib/rq/`:
 | Archivo | Responsabilidad |
 |---|---|
 | `types.ts` | Modelo de dominio (Requirement, Attachment, RepoInfo, Plan, Run, TraceEvent, entregables) |
 | `agents.ts` | Catálogo de agentes, catálogo de modelos con precios (IDs de OpenRouter reales), perfiles y prompts por defecto |
-| `store.tsx` | Contexto React + persistencia en `localStorage` (`rq-prototipo-v1`); perfiles globales y ajustes por requerimiento; `useNow()` |
+| `store.tsx` | Contexto React + persistencia en `localStorage` (`rq-prototipo-v4`); perfiles globales, ajustes por requerimiento, solicitudes de cambio, firmas, auditoría y chats; `useNow()` |
 | `planner.ts` | Sugerencia de plan y avisos (adjunto faltante = bloqueo; dependencia desactivada = aviso) |
 | `simulator.ts` | Traza **determinista** derivada de `run.startedAt` + desfases: los eventos no se guardan, se recalculan (sobrevive a recargas) |
 | `scenarios.ts` | Entregables de ejemplo (escenarios `pagos` y `portal`), mezcla con datos reales del repo y cálculo del dictamen |
 | `github.ts` | Conexión real con repos **públicos** de GitHub y análisis del diff por reglas |
+| `privacy.ts` | Agente de Privacidad HIPAA: reglas de detección de PHI, salvaguardas 164.312 y sugerencia de clasificación |
+| `governance.ts` | Roles y permisos, control de cambios (cuatro ojos), evaluación de regresión, fichas de agente y auditoría encadenada |
+| `compliance.ts` | Indicadores y alertas del panel de cumplimiento |
+| `chat.ts` | Asistente de consulta: preguntas sugeridas y respuestas por reglas sobre los datos de la ejecución, con citas |
 | `derive.ts` / `monitor.ts` | Estado derivado de ejecuciones · datos del Monitor (otros usuarios simulados, estables por ventanas de 20 s) |
 
 Componentes en `frontend/components/rq/` (`FlowGraph`, `AgentPanel`, `ProfileEditor`, `RepoConnector`, `EventRow`, `ui.tsx` y `tabs/`).
@@ -73,6 +80,18 @@ Componentes en `frontend/components/rq/` (`FlowGraph`, `AgentPanel`, `ProfileEdi
 - Cada ejecución congela el proveedor, el modelo y la versión del prompt de cada agente (`Run.profiles`).
 - `reactStrictMode` está activo: los efectos de carga y guardado se ejecutan dos veces en dev (por eso la persistencia espera a `ready`).
 - Hashes o índices a partir de enteros sin signo: usar `>>>`, no `>>` (un índice negativo rompió el Monitor).
+- **PHI:** nunca mostrar, guardar ni enviar el valor de un identificador detectado; solo tipo, archivo y línea. Con
+  `phi !== "no"` el agente de Privacidad es obligatorio y el dictamen no puede ser `APROBADO` sin él.
+- **Control de cambios:** editar la configuración **predeterminada** de un agente crea una solicitud (`ChangeRequest`), no aplica
+  el cambio. Aprobar exige permiso, cuatro ojos, evaluación ejecutada y ningún bloqueo de BAA. Los ajustes por requerimiento sí se
+  aplican al momento, pero quedan en la auditoría.
+- **Auditoría:** toda acción relevante pasa por `appendAudit` y encadena el hash anterior; no reescribir entradas existentes.
+- La clave de `localStorage` sube de versión cuando cambia la forma de los datos (hoy `rq-prototipo-v4`).
+- **Asistente:** solo lee. Cada respuesta cita la evidencia y, si el dato no está en la ejecución, lo dice (`fallback`). No puede
+  firmar ni aprobar. El texto que escribe el usuario pasa por `scanTypedText` antes de enviarse, y en la auditoría se guardan
+  metadatos, nunca la pregunta.
+- **Cuidado al escribir expresiones regulares desde scripts de shell:** un `\b` mal escapado dejó un carácter de control dentro de
+  una regex de `privacy.ts` y la volvió inservible. Escribir esos archivos con la herramienta de edición, no por heredoc.
 
 ## Estilo visual
 Paleta cálida definida en `frontend/tailwind.config.ts` (`paper`, `surface`, `sunken`, `ink-*`, acento terracota `accent`, semánticos `ok/warn/danger/info`) y clases `panel`, `panel-title`, `chip`, `pill`, `btn-primary`, `btn-ghost` en `app/globals.css`. Reutilizarlas en vez de colores sueltos. Severidades y estados siempre con icono o texto, no solo color.

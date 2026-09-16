@@ -36,6 +36,7 @@ const config: Config = {
         info: { DEFAULT: "#2F6F8F", soft: "#E6F0F5" },
         violet: { DEFAULT: "#5B4B8A", soft: "#EDEAF5" },
         rose: { DEFAULT: "#A8445C", soft: "#F7E8EC" },
+        teal: { DEFAULT: "#0F6E6E", soft: "#E2F0EF" }, // privacidad / PHI
       },
       fontFamily: {
         sans: ["ui-sans-serif", "-apple-system", "Segoe UI", "Inter", "Helvetica Neue", "Arial", "sans-serif"],

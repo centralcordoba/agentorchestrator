@@ -14,6 +14,7 @@ const TYPE_LABEL: Record<TraceEventType, string> = {
   guardrail_applied: "guardarraíl",
   agent_completed: "termina",
   agent_skipped: "omitido",
+  phi_redacted: "PHI redactada",
   run_completed: "fin",
 };
 
@@ -26,6 +27,7 @@ const TYPE_CLASS: Record<TraceEventType, string> = {
   guardrail_applied: "border-accent/30 bg-accent-soft text-accent",
   agent_completed: "border-ok/30 bg-ok-soft text-ok",
   agent_skipped: "chip-neutral text-ink-400",
+  phi_redacted: "border-teal/30 bg-teal-soft text-teal",
   run_completed: "border-ok/30 bg-ok-soft text-ok",
 };
 

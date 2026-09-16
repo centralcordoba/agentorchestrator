@@ -1,5 +1,7 @@
 // Conexión con repositorios públicos de GitHub desde el navegador (API REST sin autenticación).
 // Límite de GitHub: 60 peticiones por hora por IP. Conectar un repositorio consume 3-5.
+import { addedLines } from "./diff";
+import { analyzePrivacy } from "./privacy";
 import type { Finding, RepoFile, RepoInfo, Severity } from "./types";
 
 const API = "https://api.github.com";
@@ -123,8 +125,19 @@ export async function connectRepo(meta: RepoMeta, branch: string, mode: CompareM
     files,
     filesTruncated: rawFiles.length >= 300,
     languages: meta.languages,
-    findings: analyzeDiff(rawFiles, meta.htmlUrl, headSha),
+    ...withPrivacy(rawFiles, meta.htmlUrl, headSha),
     fetchedAt: new Date().toISOString(),
+  };
+}
+
+/** Hallazgos de Código/SQL más los del agente de Privacidad HIPAA (identificadores, salvaguardas y señales de PHI). */
+function withPrivacy(files: NonNullable<CompareResponse["files"]>, htmlUrl: string, headSha: string) {
+  const blob = (path: string, line?: number) => `${htmlUrl}/blob/${headSha}/${path}${line ? `#L${line}` : ""}`;
+  const privacy = analyzePrivacy(files, blob);
+  return {
+    findings: [...analyzeDiff(files, htmlUrl, headSha), ...privacy.findings],
+    phiDetections: privacy.detections,
+    phiSignals: privacy.signals,
   };
 }
 
@@ -157,21 +170,6 @@ const RULES: Rule[] = [
 const TEST_FILE = /(^|\/)(test|tests|__tests__|spec)\/|[._-](test|spec)\.[a-z]+$|Tests?\.(java|cs|kt)$/i;
 const MANIFEST = /(^|\/)(package\.json|pom\.xml|build\.gradle(\.kts)?|requirements\.txt|pyproject\.toml|go\.mod|Cargo\.toml|composer\.json|Gemfile|[\w.-]+\.csproj)$/;
 const SOURCE = /\.(js|jsx|ts|tsx|java|kt|cs|py|go|rb|php|vue|svelte|scala|swift)$/i;
-
-function addedLines(patch: string): { line: number; text: string }[] {
-  const out: { line: number; text: string }[] = [];
-  let n = 0;
-  for (const raw of patch.split("\n")) {
-    const h = raw.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@/);
-    if (h) {
-      n = Number(h[1]);
-      continue;
-    }
-    if (raw.startsWith("+")) out.push({ line: n++, text: raw.slice(1) });
-    else if (raw.startsWith(" ")) n++;
-  }
-  return out;
-}
 
 export function analyzeDiff(files: NonNullable<CompareResponse["files"]>, htmlUrl: string, headSha: string): Finding[] {
   const findings: Finding[] = [];

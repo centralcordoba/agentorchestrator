@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { AgentChip, Avatar, Stat, StatusDot, fmtTokens, fmtUsd } from "@/components/rq/ui";
+import ComplianceView from "@/components/rq/monitor/ComplianceView";
+import { AgentChip, Avatar, Stat, StatusDot, Tabs, fmtTokens, fmtUsd } from "@/components/rq/ui";
 import { AGENTS, modelLabel } from "@/lib/rq/agents";
 import { buildMonitor } from "@/lib/rq/monitor";
 import { useNow, useRq } from "@/lib/rq/store";
 
 type Filter = "todos" | "en_linea";
+type MonitorTab = "actividad" | "cumplimiento";
 
 export default function MonitorPage() {
   const { requirements, currentUserId, location, setLocation, profiles } = useRq();
   const now = useNow(true, 2000);
   const [filter, setFilter] = useState<Filter>("todos");
+  const [tab, setTab] = useState<MonitorTab>("actividad");
 
   useEffect(() => setLocation({ page: "monitor" }), [setLocation]);
 
@@ -29,11 +32,25 @@ export default function MonitorPage() {
         <div>
           <h1 className="font-serif text-[26px] leading-tight text-ink-900">Monitor</h1>
           <p className="mt-1 max-w-2xl text-[13px] text-ink-500">
-            Quién está usando la aplicación, en qué requerimiento y qué agentes están trabajando ahora. Se actualiza cada 2 s.
+            Quién usa la aplicación y qué agentes trabajan ahora, y el estado de cumplimiento HIPAA de los requerimientos. Se actualiza solo.
           </p>
         </div>
         <span className="chip border-warn/30 bg-warn-soft text-warn">otros usuarios simulados · tus ejecuciones son reales en esta sesión</span>
       </div>
+
+      <Tabs<MonitorTab>
+        value={tab}
+        onChange={setTab}
+        tabs={[
+          { id: "actividad", label: "Actividad" },
+          { id: "cumplimiento", label: "Cumplimiento HIPAA" },
+        ]}
+      />
+
+      {tab === "cumplimiento" ? (
+        <ComplianceView />
+      ) : (
+        <div className="space-y-5">
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Usuarios en línea" value={`${online.length}/${data.users.length}`} />
@@ -186,6 +203,8 @@ export default function MonitorPage() {
           </table>
         </div>
       </section>
+      </div>
+      )}
     </div>
   );
 }
