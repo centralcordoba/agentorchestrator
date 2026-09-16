@@ -5,11 +5,13 @@ import { Suspense, useCallback, useEffect, useState } from "react";
 import AgentCardsView from "@/components/rq/governance/AgentCardsView";
 import AuditView from "@/components/rq/governance/AuditView";
 import ChangeRequestsView from "@/components/rq/governance/ChangeRequestsView";
+import PeopleView from "@/components/rq/governance/PeopleView";
+import VaultView from "@/components/rq/governance/VaultView";
 import { Tabs } from "@/components/rq/ui";
 import { useRq } from "@/lib/rq/store";
 
-type TabId = "cambios" | "fichas" | "auditoria";
-const TAB_IDS: TabId[] = ["cambios", "fichas", "auditoria"];
+type TabId = "cambios" | "fichas" | "personas" | "boveda" | "auditoria";
+const TAB_IDS: TabId[] = ["cambios", "fichas", "personas", "boveda", "auditoria"];
 
 export default function GovernancePage() {
   return (
@@ -56,6 +58,8 @@ function Governance() {
         tabs={[
           { id: "cambios", label: "Solicitudes de cambio", badge: pending ? <span className="chip border-warn/30 bg-warn-soft text-warn">{pending}</span> : undefined },
           { id: "fichas", label: "Fichas de agentes" },
+          { id: "personas", label: "Personas" },
+          { id: "boveda", label: "Bóveda de secretos" },
           { id: "auditoria", label: "Auditoría" },
         ]}
       />
@@ -72,6 +76,8 @@ function Governance() {
         />
       )}
       {tab === "fichas" && <AgentCardsView />}
+      {tab === "personas" && <PeopleView />}
+      {tab === "boveda" && <VaultView />}
       {tab === "auditoria" && <AuditView />}
     </div>
   );

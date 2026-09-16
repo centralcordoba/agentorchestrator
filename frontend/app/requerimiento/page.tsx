@@ -3,25 +3,67 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
-import AgentPanel from "@/components/rq/AgentPanel";
-import ChatPanel from "@/components/rq/chat/ChatPanel";
-import { CodeTab, KiuwanTab, SqlTab, UiuxTab, VerdictTab, VtrTab } from "@/components/rq/tabs/DeliverableTabs";
-import ExecutionTab from "@/components/rq/tabs/ExecutionTab";
-import PrivacyTab from "@/components/rq/tabs/PrivacyTab";
+import {
+  AsyncState,
+  ErrorState,
+  Loading,
+  Refreshing,
+  SimulatedNotice,
+} from "@/components/rq/AsyncState";
 import { PhiBadge } from "@/components/rq/PhiControl";
-import PlanTab from "@/components/rq/tabs/PlanTab";
-import RequirementTab from "@/components/rq/tabs/RequirementTab";
-import { EmptyState, StatusDot, Tabs, VerdictBadge } from "@/components/rq/ui";
-import { REQ_STATUS_LABELS, requirementStatus, runView } from "@/lib/rq/derive";
-import { useNow, useRq } from "@/lib/rq/store";
-import type { AgentId } from "@/lib/rq/types";
+import { AgentBoard, ConnectionBadge, LiveTrace } from "@/components/rq/LiveRun";
+import { FlowGraph } from "@/components/rq/FlowGraph";
+import {
+  CodePanel,
+  KiuwanPanel,
+  PrivacyPanel,
+  SqlPanel,
+  TestsPanel,
+  UiuxPanel,
+  VerdictPanel,
+  VtrPanel,
+} from "@/components/rq/detail/DeliverablePanels";
+import PlanPanel from "@/components/rq/detail/PlanPanel";
+import RequirementPanel from "@/components/rq/detail/RequirementPanel";
+import { Tabs, VerdictBadge, fmtDate, fmtTokens, fmtUsd } from "@/components/rq/ui";
+import { api } from "@/lib/api/client";
+import type { PlanView, Requirement, RunDetail, RunPage } from "@/lib/api/types";
+import { invalidate, useResource } from "@/lib/api/useResource";
+import { useRunStream } from "@/lib/api/useRunStream";
+import type { PhiClassification } from "@/lib/rq/types";
 
-type TabId = "requerimiento" | "plan" | "ejecucion" | "codigo" | "kiuwan" | "sql" | "uiux" | "privacidad" | "vtr" | "dictamen";
-const TAB_IDS: TabId[] = ["requerimiento", "plan", "ejecucion", "codigo", "kiuwan", "sql", "uiux", "privacidad", "vtr", "dictamen"];
+type TabId =
+  | "requerimiento"
+  | "plan"
+  | "ejecucion"
+  | "codigo"
+  | "tests"
+  | "kiuwan"
+  | "sql"
+  | "uiux"
+  | "privacidad"
+  | "vtr"
+  | "dictamen";
+
+const TABS: { id: TabId; label: string }[] = [
+  { id: "requerimiento", label: "Requerimiento" },
+  { id: "plan", label: "Plan" },
+  { id: "ejecucion", label: "Ejecución" },
+  { id: "codigo", label: "Código" },
+  { id: "tests", label: "Tests" },
+  { id: "kiuwan", label: "Kiuwan" },
+  { id: "sql", label: "SQL" },
+  { id: "uiux", label: "UI/UX" },
+  { id: "privacidad", label: "Privacidad" },
+  { id: "vtr", label: "VTR" },
+  { id: "dictamen", label: "Dictamen" },
+];
+
+const TAB_IDS = TABS.map((t) => t.id);
 
 export default function RequirementPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<Loading rows={4} />}>
       <RequirementDetail />
     </Suspense>
   );
@@ -30,134 +72,309 @@ export default function RequirementPage() {
 function RequirementDetail() {
   const params = useSearchParams();
   const router = useRouter();
-  const { requirements, ready, setLocation } = useRq();
   const id = params.get("id") ?? "";
-  const req = requirements.find((r) => r.id === id);
-  const initialTab = (TAB_IDS as string[]).includes(params.get("tab") ?? "") ? (params.get("tab") as TabId) : "requerimiento";
-  const [tab, setTabState] = useState<TabId>(initialTab);
+  const initial = (TAB_IDS as string[]).includes(params.get("tab") ?? "")
+    ? (params.get("tab") as TabId)
+    : "requerimiento";
+  const [tab, setTabState] = useState<TabId>(initial);
   const [runId, setRunId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<{ agent: AgentId; tab?: "actividad" | "configuracion" } | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
 
-  const setTab = useCallback(
-    (t: TabId) => {
-      setTabState(t);
-      const url = new URL(window.location.href);
-      url.searchParams.set("tab", t);
-      window.history.replaceState(null, "", url.toString());
-    },
-    [],
+  const setTab = useCallback((next: TabId) => {
+    setTabState(next);
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", next);
+    window.history.replaceState(null, "", url.toString());
+  }, []);
+
+  const requirement = useResource<Requirement>(
+    id ? `requirement:${id}` : null,
+    () => api.requirements.get(id),
+  );
+  const plan = useResource<PlanView>(id ? `plan:${id}` : null, () => api.requirements.plan(id), {
+    enabled: Boolean(id),
+  });
+  const runs = useResource<RunPage>(
+    id ? `runs:${id}` : null,
+    () => api.requirements.runs(id, { limit: 20 }),
+    { refreshMs: 8000 },
   );
 
-  useEffect(() => setLocation({ page: "requerimiento", requirementId: id, tab }), [id, tab, setLocation]);
+  const selected = useMemo(() => {
+    const items = runs.data?.items ?? [];
+    if (!items.length) return null;
+    return items.find((r) => r.id === runId) ?? items[0];
+  }, [runs.data, runId]);
 
-  const run = req ? (runId ? req.runs.find((r) => r.id === runId) : undefined) ?? req.runs[req.runs.length - 1] : undefined;
-  const now = useNow(true, 120);
-  const view = useMemo(() => (req && run ? runView(req, run, now) : null), [req, run, now]);
+  const stream = useRunStream(selected ? selected.id : null);
 
-  if (!ready) return null;
-  if (!req) {
+  // El canal se entera antes que la lista, así que manda él: si no, habría que esperar al
+  // siguiente refresco para ver los informes de una ejecución recién acabada.
+  const finished = Boolean(
+    selected && (selected.status !== "en_curso" || stream.finalStatus !== null),
+  );
+  const detail = useResource<RunDetail>(
+    selected && finished ? `run:${selected.id}` : null,
+    () => api.runs.get(selected!.id),
+    { enabled: Boolean(selected && finished) },
+  );
+
+  useEffect(() => {
+    if (!id) router.replace("/");
+  }, [id, router]);
+
+  useEffect(() => {
+    if (stream.finalStatus === null) return;
+    invalidate(`runs:${id}`);
+    void runs.reload();
+    // `runs` cambia en cada render: solo interesa el momento en que la ejecución termina.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.finalStatus, id]);
+
+  if (!id) return null;
+  if (requirement.loading) return <Loading rows={4} />;
+  if (!requirement.data) {
     return (
-      <EmptyState title="Requerimiento no encontrado">
-        <Link href="/" className="underline">
+      <div className="space-y-3">
+        <ErrorState error={requirement.error} onRetry={() => requirement.reload()} />
+        <Link href="/" className="btn-ghost inline-block">
           Volver a la lista
         </Link>
-      </EmptyState>
+      </div>
     );
   }
 
-  const status = requirementStatus(req, now);
-  const running = view?.state === "en_curso";
-  const enabled = (a: AgentId) => (view ? view.run.enabledAgents.includes(a) : req.plan?.items.find((i) => i.agentId === a)?.enabled ?? true);
-  const dot = (a: AgentId) => {
-    if (!view || !view.run.enabledAgents.includes(a)) return undefined;
-    return <StatusDot status={view.completed.includes(a) ? "completado" : running ? "trabajando" : "pendiente"} />;
-  };
+  const req = requirement.data;
+  const deliverables = detail.data?.deliverables;
+  const verdict = deliverables?.verdict ?? null;
+  const simulated = Object.values(stream.run?.profiles ?? {})[0]?.provider;
+
+  function refreshRequirement() {
+    invalidate(`requirement:${id}`);
+    void requirement.reload();
+  }
+
+  function refreshPlan() {
+    invalidate(`plan:${id}`);
+    void plan.reload();
+  }
 
   return (
-    <div className={`space-y-4 transition-[padding] ${chatOpen ? "xl:pr-[476px]" : ""}`}>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <Link href="/" className="text-[12px] text-ink-500 hover:text-ink-900">
-            ← Requerimientos
+    <div className="space-y-4">
+      <header className="space-y-2">
+        <p className="text-[12px] text-ink-500">
+          <Link href="/" className="hover:text-accent">
+            Requerimientos
           </Link>
-          <div className="mt-1 flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[13px] text-accent">{req.id}</span>
-            <span className="chip chip-neutral">{REQ_STATUS_LABELS[status]}</span>
-            <PhiBadge phi={req.phi} />
-            {view?.verdict && <VerdictBadge verdict={view.verdict} />}
+          {" · "}
+          <span className="font-mono text-accent">{req.id}</span>
+        </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="font-serif text-[26px] leading-tight text-ink-900">{req.title}</h1>
+            <p className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-ink-500">
+              <PhiBadge phi={req.phi as PhiClassification} />
+              <span>responsable {req.owner}</span>
+              <span>· creado {fmtDate(req.createdAt)}</span>
+              {selected && (
+                <span>
+                  · última ejecución{" "}
+                  <span className="font-mono text-accent">{selected.id}</span> ({selected.status})
+                </span>
+              )}
+            </p>
           </div>
-          <h1 className="font-serif text-[24px] leading-tight text-ink-900">{req.title}</h1>
+          <div className="flex items-center gap-2">
+            <Refreshing active={runs.refreshing && !runs.loading} />
+            {verdict && <VerdictBadge verdict={verdict.verdict as never} />}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button className="btn-primary py-1.5" onClick={() => setChatOpen((v) => !v)} aria-expanded={chatOpen} aria-controls="chat-asistente">
-            {chatOpen ? "Cerrar asistente" : "Preguntar al asistente"}
-          </button>
-          <button className="btn-ghost" onClick={() => router.push("/agentes")}>
-            configuración global de agentes
-          </button>
-        </div>
-      </div>
+      </header>
 
-      <Tabs<TabId>
+      <Tabs
+        tabs={TABS.map((t) => ({ id: t.id, label: t.label }))}
         value={tab}
-        onChange={setTab}
-        tabs={[
-          { id: "requerimiento", label: "Requerimiento", badge: <span className="chip chip-neutral">{req.attachments.length}</span> },
-          { id: "plan", label: "Plan de agentes" },
-          { id: "ejecucion", label: "Ejecución", badge: running ? <StatusDot status="trabajando" /> : undefined },
-          { id: "codigo", label: "Código y Tests", badge: dot("code"), hidden: !enabled("code") && !enabled("tests") },
-          { id: "kiuwan", label: "Kiuwan", badge: dot("kiuwan"), hidden: !enabled("kiuwan") },
-          { id: "sql", label: "SQL", badge: dot("sql"), hidden: !enabled("sql") },
-          { id: "uiux", label: "UI/UX", badge: dot("uiux"), hidden: !enabled("uiux") },
-          { id: "privacidad", label: "Privacidad", badge: dot("privacy"), hidden: !enabled("privacy") },
-          { id: "vtr", label: "VTR", badge: dot("vtr"), hidden: !enabled("vtr") },
-          { id: "dictamen", label: "Dictamen", badge: dot("verdict") },
-        ]}
+        onChange={(next) => setTab(next as TabId)}
       />
 
-      <div>
-        {tab === "requerimiento" && <RequirementTab req={req} readOnly={running} />}
-        {tab === "plan" && <PlanTab req={req} running={running} onStarted={() => { setRunId(null); setTab("ejecucion"); }} onConfigure={(a) => setPanel({ agent: a, tab: "configuracion" })} />}
-        {tab === "ejecucion" && (
-          <ExecutionTab
-            req={req}
-            view={view}
-            now={now}
-            selectedAgent={panel?.agent ?? null}
-            onSelectAgent={(a) => setPanel({ agent: a })}
-            onSelectRun={setRunId}
-            onGoToPlan={() => setTab("plan")}
-          />
-        )}
-        {tab === "codigo" && <CodeTab req={req} view={view} />}
-        {tab === "kiuwan" && <KiuwanTab view={view} />}
-        {tab === "sql" && <SqlTab view={view} />}
-        {tab === "uiux" && <UiuxTab view={view} />}
-        {tab === "privacidad" && <PrivacyTab req={req} view={view} />}
-        {tab === "vtr" && <VtrTab view={view} />}
-        {tab === "dictamen" && <VerdictTab req={req} view={view} />}
-      </div>
-
-      {chatOpen && (
-        <div id="chat-asistente">
-          <ChatPanel req={req} view={view} tab={tab} onNavigate={(t) => setTab(t as TabId)} onClose={() => setChatOpen(false)} />
-        </div>
+      {tab === "requerimiento" && (
+        <RequirementPanel requirement={req} onChanged={refreshRequirement} />
       )}
 
-      {panel && (
-        <AgentPanel
-          req={req}
-          view={view}
-          agentId={panel.agent}
-          initialTab={panel.tab}
-          onClose={() => setPanel(null)}
-          onOpenDeliverable={(t) => {
-            setPanel(null);
-            setTab(t as TabId);
-          }}
+      {tab === "plan" && (
+        <>
+          {plan.loading ? (
+            <Loading rows={3} />
+          ) : (
+            <PlanPanel
+              requirement={req}
+              plan={plan.data}
+              onPlanChanged={refreshPlan}
+              onRunStarted={(newRunId) => {
+                setRunId(newRunId);
+                invalidate(`runs:${id}`);
+                void runs.reload();
+                setTab("ejecucion");
+              }}
+            />
+          )}
+        </>
+      )}
+
+      {tab === "ejecucion" && (
+        <ExecutionSection
+          runs={runs}
+          selectedId={selected?.id ?? null}
+          onSelect={setRunId}
+          stream={stream}
         />
+      )}
+
+      {tab !== "requerimiento" && tab !== "plan" && tab !== "ejecucion" && (
+        <div className="space-y-3">
+          <SimulatedNotice provider={simulated} />
+          <DeliverableSection
+            tab={tab}
+            detail={detail}
+            selected={Boolean(selected)}
+            finished={finished}
+          />
+        </div>
       )}
     </div>
   );
+}
+
+function ExecutionSection({
+  runs,
+  selectedId,
+  onSelect,
+  stream,
+}: {
+  runs: ReturnType<typeof useResource<RunPage>>;
+  selectedId: string | null;
+  onSelect: (id: string) => void;
+  stream: ReturnType<typeof useRunStream>;
+}) {
+  return (
+    <AsyncState
+      resource={runs}
+      empty={{
+        title: "Este requerimiento no se ha ejecutado todavía",
+        description: "Ve a la pestaña Plan, revisa los agentes y lanza la revisión.",
+      }}
+    >
+      {(page) =>
+        page.items.length === 0 ? (
+          <p className="panel px-4 py-6 text-center text-[13px] text-ink-500">
+            Este requerimiento no se ha ejecutado todavía.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-[12px] text-ink-500" htmlFor="run-select">
+                Ejecución
+              </label>
+              <select
+                id="run-select"
+                value={selectedId ?? ""}
+                onChange={(e) => onSelect(e.target.value)}
+                className="rounded-lg border border-line bg-surface px-2 py-1.5 font-mono text-[12px] outline-none focus:border-accent"
+              >
+                {page.items.map((run) => (
+                  <option key={run.id} value={run.id}>
+                    {run.id} · {run.status} · {fmtDate(run.startedAt)}
+                  </option>
+                ))}
+              </select>
+              <ConnectionBadge stream={stream} />
+              {stream.run && (
+                <span className="text-[12px] text-ink-500">
+                  {fmtTokens(
+                    (stream.run.usage?.tokensIn ?? 0) + (stream.run.usage?.tokensOut ?? 0),
+                  )}{" "}
+                  tokens · {fmtUsd(stream.run.usage?.costUsd ?? 0)}
+                </span>
+              )}
+            </div>
+
+            <SimulatedNotice provider={Object.values(stream.run?.profiles ?? {})[0]?.provider} />
+
+            <section className="space-y-2">
+              <h2 className="panel-title">Flujo</h2>
+              <FlowGraph stream={stream} />
+            </section>
+
+            <section className="space-y-2">
+              <h2 className="panel-title">Agentes</h2>
+              <AgentBoard stream={stream} />
+            </section>
+
+            <section className="space-y-2">
+              <h2 className="panel-title">
+                Traza{" "}
+                <span className="text-[12px] font-normal text-ink-400">
+                  ({stream.events.length} eventos)
+                </span>
+              </h2>
+              <LiveTrace stream={stream} />
+            </section>
+          </div>
+        )
+      }
+    </AsyncState>
+  );
+}
+
+function DeliverableSection({
+  tab,
+  detail,
+  selected,
+  finished,
+}: {
+  tab: TabId;
+  detail: ReturnType<typeof useResource<RunDetail>>;
+  selected: boolean;
+  finished: boolean;
+}) {
+  if (!selected) {
+    return (
+      <p className="panel px-4 py-6 text-center text-[13px] text-ink-500">
+        No hay ninguna ejecución de la que mostrar entregables.
+      </p>
+    );
+  }
+  if (!finished) {
+    return (
+      <p className="panel px-4 py-6 text-center text-[13px] text-ink-500">
+        La ejecución sigue en curso. Los informes aparecen cuando termina; mientras tanto, la
+        pestaña <strong>Ejecución</strong> muestra la traza en vivo.
+      </p>
+    );
+  }
+  if (detail.loading) return <Loading rows={3} />;
+  if (!detail.data) {
+    return <ErrorState error={detail.error} onRetry={() => detail.reload()} />;
+  }
+
+  const deliverables = detail.data.deliverables;
+  switch (tab) {
+    case "codigo":
+      return <CodePanel deliverables={deliverables} />;
+    case "tests":
+      return <TestsPanel deliverables={deliverables} />;
+    case "kiuwan":
+      return <KiuwanPanel deliverables={deliverables} />;
+    case "sql":
+      return <SqlPanel deliverables={deliverables} />;
+    case "uiux":
+      return <UiuxPanel deliverables={deliverables} />;
+    case "privacidad":
+      return <PrivacyPanel deliverables={deliverables} />;
+    case "vtr":
+      return <VtrPanel deliverables={deliverables} />;
+    case "dictamen":
+      return <VerdictPanel deliverables={deliverables} />;
+    default:
+      return null;
+  }
 }

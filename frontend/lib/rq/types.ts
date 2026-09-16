@@ -147,7 +147,6 @@ export interface TraceEvent {
 
 export type AgentRunStatus = "pendiente" | "trabajando" | "completado" | "omitido";
 
-// ------------------------------------------------------------------ entregables
 
 export type Severity = "critica" | "alta" | "media" | "baja" | "info";
 
@@ -252,7 +251,6 @@ export interface VtrReport {
   sections: VtrSection[];
 }
 
-// ------------------------------------------------------------------ privacidad HIPAA
 
 /** Salvaguardas técnicas de la regla de seguridad de HIPAA (45 CFR 164.312). */
 export type SafeguardId = "acceso" | "auditoria" | "integridad" | "autenticacion" | "transmision";
@@ -313,7 +311,6 @@ export interface Deliverables {
   verdict: VerdictReport;
 }
 
-// ------------------------------------------------------------------ usuarios / monitor
 
 export interface AppUser {
   id: string;
@@ -323,7 +320,6 @@ export interface AppUser {
   mfa: boolean;
 }
 
-// ------------------------------------------------------------------ gobierno de IA
 
 export type Permission =
   | "crear_requerimiento"
@@ -410,7 +406,6 @@ export interface AuditEntry {
   hash: string;
 }
 
-// ------------------------------------------------------------------ asistente de consulta
 
 /** Enlace a la evidencia que respalda una respuesta del asistente. */
 export interface ChatCitation {

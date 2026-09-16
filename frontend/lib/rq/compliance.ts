@@ -79,7 +79,6 @@ export function buildCompliance(requirements: Requirement[], profiles: Record<Ag
       }
     }
 
-    // --- alertas por requerimiento
     if (criticals > 0) {
       alerts.push({
         id: `phi-crit-${req.id}`,

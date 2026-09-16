@@ -84,7 +84,6 @@ export function buildMonitor(requirements: Requirement[], currentUserId: string,
   const reqIds = requirements.map((r) => r.id);
   const tabs = ["plan", "ejecucion", "codigo", "kiuwan", "vtr", "dictamen"];
 
-  // ---- ejecuciones reales de esta sesión
   const realWorking: { userId: string; requirementId: string; agents: AgentId[] }[] = [];
   const realAgent: Record<AgentId, { calls: number; tokens: number; cost: number; guardrails: number }> = Object.fromEntries(
     AGENT_ORDER.map((a) => [a, { calls: 0, tokens: 0, cost: 0, guardrails: 0 }]),
@@ -111,7 +110,6 @@ export function buildMonitor(requirements: Requirement[], currentUserId: string,
     }
   }
 
-  // ---- usuarios
   const users: UserActivity[] = USERS.map((user, i) => {
     const isYou = user.id === currentUserId;
     const real = realWorking.filter((w) => w.userId === user.id);
@@ -134,7 +132,6 @@ export function buildMonitor(requirements: Requirement[], currentUserId: string,
     };
   });
 
-  // ---- agentes
   const agents: AgentUsage[] = AGENT_ORDER.map((a) => {
     const [calls, tokens, cost] = BASE_AGENT[a];
     const growth = minuteOfDay / 600;
@@ -154,7 +151,6 @@ export function buildMonitor(requirements: Requirement[], currentUserId: string,
     };
   });
 
-  // ---- actividad reciente (simulada, más las ejecuciones reales de hoy)
   const verbs: [string, AgentId | undefined][] = [
     ["ejecutó la revisión de", "orchestrator"],
     ["cambió el modelo de Tests en", "tests"],

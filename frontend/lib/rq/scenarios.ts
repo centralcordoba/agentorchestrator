@@ -1,6 +1,6 @@
 // Entregables simulados por escenario. En el prototipo sin backend, cada requerimiento
 // apunta a un escenario y los agentes "producen" estos resultados durante la ejecución.
-import { languageSummary } from "./github";
+import { languageSummary } from "./repo";
 import { SAFEGUARD_LABEL, WHERE_LABELS, handlesPhi, realPrivacyReport } from "./privacy";
 import type { AgentId, ChangeMapEntry, Deliverables, Finding, Requirement, ScenarioId, Severity, Verdict, VerdictReport, VtrSection } from "./types";
 

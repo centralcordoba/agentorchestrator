@@ -42,7 +42,6 @@ export function handlesPhi(req: Pick<Requirement, "phi">): boolean {
   return req.phi !== "no";
 }
 
-// ------------------------------------------------------------------ reglas sobre el diff
 
 interface PrivacyRule {
   id: string;
@@ -162,7 +161,6 @@ export function scanTypedText(text: string): PhiIdentifier[] {
   return TYPED_PHI.filter((r) => r.test.test(text)).map((r) => r.identifier);
 }
 
-// ------------------------------------------------------------------ sugerencia de clasificación
 
 const PHI_WORDS = ["paciente", "pacientes", "historia clínica", "diagnóstico", "receta", "afiliado", "aseguradora", "copago", "laboratorio", "clínico", "clínica", "médico", "salud", "fhir", "hl7", "hipaa", "phi"];
 

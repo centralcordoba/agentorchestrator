@@ -14,7 +14,6 @@ import type {
   ProfileSnapshot,
 } from "./types";
 
-// ------------------------------------------------------------------ roles y permisos
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
   crear_requerimiento: "Crear requerimientos",
@@ -48,7 +47,6 @@ export function missingPermissionText(permission: Permission): string {
   return `Requiere el permiso «${PERMISSION_LABELS[permission]}» (${rolesWith(permission).join(", ")}).`;
 }
 
-// ------------------------------------------------------------------ fichas de agente
 
 export interface AgentCard {
   owner: string; // id de usuario responsable
@@ -70,7 +68,6 @@ export const AGENT_CARDS: Record<AgentId, AgentCard> = {
   chat: { owner: "u-martin", dataAccess: ["Hallazgos, traza y entregables de la ejecución abierta", "Diff del repositorio"], receivesPhi: "redactada", limitations: ["Solo lectura: no firma dictámenes ni aprueba cambios.", "Si el dato no está en la ejecución, lo dice en vez de suponerlo."] },
 };
 
-// ------------------------------------------------------------------ control de cambios
 
 export function snapshot(p: AgentProfile): ProfileSnapshot {
   return { provider: p.provider, model: p.model, temperature: p.temperature, maxSteps: p.maxSteps, systemPrompt: p.systemPrompt, taskPrompt: p.taskPrompt, promptVersion: p.promptVersion };
@@ -164,7 +161,6 @@ export function approvalGate(cr: ChangeRequest, user: AppUser | undefined): Revi
   return { ok: checks.every((c) => c.ok), checks, commentRequired: Boolean(cr.evaluation?.regressions) };
 }
 
-// ------------------------------------------------------------------ diff de texto por palabras
 
 export type DiffPart = { kind: "igual" | "quitado" | "agregado"; text: string };
 
@@ -196,7 +192,6 @@ export function wordDiff(a: string, b: string): DiffPart[] {
   return out;
 }
 
-// ------------------------------------------------------------------ auditoría encadenada
 
 function fnv(input: string, seed: number): string {
   let h = seed >>> 0;

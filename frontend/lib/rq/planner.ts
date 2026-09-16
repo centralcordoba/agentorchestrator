@@ -1,6 +1,6 @@
 // Sugerencia de plan del orquestador (simulada en el frontend) y avisos antes de ejecutar.
 import { AGENTS, AGENT_ORDER } from "./agents";
-import { FRONTEND_FILE } from "./github";
+import { FRONTEND_FILE } from "./repo";
 import { handlesPhi } from "./privacy";
 import type { AgentId, AttachmentKind, Plan, PlanItem, Requirement } from "./types";
 

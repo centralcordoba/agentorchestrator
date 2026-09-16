@@ -105,7 +105,6 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
     detail,
   });
 
-  // ------------------------------------------------------------ 1. orquestador
   const orch = new Track(0);
   orch.push({ gap: 0, type: "run_started", agent: "orchestrator", title: `Ejecución iniciada para ${req.id}`, detail: `${run.enabledAgents.length - 2} agentes especialistas activos.` });
   orch.push(tool("orchestrator", "list_attachments", { requerimiento: req.id }, { adjuntos: req.attachments.map((a) => a.name) }));
@@ -115,7 +114,6 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
   }
   all.push(...orch.events);
 
-  // ------------------------------------------------------------ 2. código
   const repo = req.attachments.find((a) => a.kind === "repo");
   const code = new Track(orch.t, dlp);
   if (on("code")) {
@@ -141,7 +139,6 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
     all.push(...code.events);
   }
 
-  // ------------------------------------------------------------ 3. paralelo
   const parStart = code.t;
   let parEnd = parStart;
   const hasCode = on("code");
@@ -245,7 +242,6 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
     parEnd = Math.max(parEnd, pt.t);
   }
 
-  // ------------------------------------------------------------ 4. VTR
   const vt = new Track(parEnd, dlp);
   if (on("vtr")) {
     vt.push(msg("orchestrator", "vtr", "task_request", "Generar VTR con los resultados disponibles.", 300));
@@ -260,7 +256,6 @@ export function buildTimeline(req: Requirement, run: Run): TraceEvent[] {
     all.push(...vt.events);
   }
 
-  // ------------------------------------------------------------ 5. dictamen
   const dt = new Track(vt.t);
   const findings = consolidatedFindings(d, run.enabledAgents);
   dt.push(msg("orchestrator", "verdict", "task_request", "Consolidar hallazgos y emitir dictamen.", 300));

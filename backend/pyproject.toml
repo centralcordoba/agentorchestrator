@@ -1,0 +1,33 @@
+[project]
+name = "orq-backend"
+version = "0.1.0"
+description = "Orquestador multiagente de revisión de requerimientos"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "uvicorn[standard]>=0.30,<1.0",
+    "pydantic>=2.7,<3.0",
+    "httpx>=0.27",
+    "python-dotenv>=1.0",
+    "anthropic>=1.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg>=0.30",
+    "alembic>=1.13",
+    "psycopg[binary]>=3.2",
+    "cryptography>=43.0",
+]
+
+[project.optional-dependencies]
+# Dependencias de la demo de bolsa que sigue en `app/` (se retiran en ORQ-32).
+demo = ["anthropic>=0.70", "yfinance>=0.2.50", "pandas>=2.2"]
+dev = ["pytest>=8.0", "pytest-asyncio>=1.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.setuptools]
+packages = ["orq"]

@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { USERS } from "@/lib/rq/mockData";
+import { useSession } from "@/lib/api/session";
 import { useRq } from "@/lib/rq/store";
-import { Avatar } from "./ui";
+import LoginScreen from "./LoginScreen";
 
 const NAV = [
   { href: "/", label: "Requerimientos", match: (p: string) => p === "/" || p.startsWith("/requerimiento") },
@@ -15,11 +15,20 @@ const NAV = [
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname() ?? "/";
-  const { currentUserId, setCurrentUser, resetDemo, ready, changeRequests } = useRq();
+  const { resetDemo, ready, changeRequests } = useRq();
+  const session = useSession();
   const pendingChanges = changeRequests.filter((c) => c.status === "pendiente").length;
-  const user = USERS.find((u) => u.id === currentUserId) ?? USERS[0];
 
   if (pathname.startsWith("/demo-bolsa")) return <>{children}</>;
+
+  if (session.loading) {
+    return (
+      <p className="flex min-h-screen items-center justify-center text-[13px] text-ink-400">
+        Comprobando la sesión…
+      </p>
+    );
+  }
+  if (!session.user) return <LoginScreen />;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -54,24 +63,27 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
           <div className="ml-auto flex items-center gap-2">
-            <span className="chip border-warn/30 bg-warn-soft text-warn" title="Todo se simula en el navegador; no hay backend.">
+            <span
+              className="chip border-warn/30 bg-warn-soft text-warn"
+              title="Gobierno, Monitor y la configuración de agentes siguen con datos de ejemplo."
+            >
               datos simulados
             </span>
-            <label className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2">
-              <Avatar user={user} size={24} />
-              <span className="sr-only">Sesión como</span>
-              <select
-                value={currentUserId}
-                onChange={(e) => setCurrentUser(e.target.value)}
-                className="bg-transparent text-[12.5px] text-ink-900 outline-none"
+            <span className="flex items-center gap-2 rounded-lg border border-line bg-surface py-1 pl-1 pr-2.5">
+              <span
+                aria-hidden
+                className="flex h-6 w-6 items-center justify-center rounded-md bg-sunken font-mono text-[10.5px] font-semibold text-ink-700"
               >
-                {USERS.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.name} · {u.role}
-                  </option>
-                ))}
-              </select>
-            </label>
+                {session.user.initials}
+              </span>
+              <span className="text-[12.5px] text-ink-900">
+                {session.user.name}
+                <span className="text-ink-400"> · {session.user.roleLabel}</span>
+              </span>
+            </span>
+            <button className="btn-ghost" onClick={() => void session.logout()}>
+              Salir
+            </button>
           </div>
         </div>
       </header>
@@ -82,7 +94,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <footer className="border-t border-line bg-surface">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-3 px-4 py-2.5 text-[11.5px] text-ink-500 sm:px-6">
-          <span>Prototipo de interfaz sin backend: ejecuciones, usuarios y consumo son simulados.</span>
+          <span>
+            Requerimientos, ejecuciones, repositorios, usuarios y la bóveda de secretos vienen del
+            backend; el control de cambios, las fichas de agentes y el consumo del Monitor siguen
+            siendo datos de ejemplo.
+          </span>
           <button onClick={resetDemo} className="btn-ghost">
             restablecer datos de ejemplo
           </button>
